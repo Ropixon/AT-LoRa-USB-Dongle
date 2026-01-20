@@ -25,7 +25,7 @@ When sending packets, no additional "wrapping" or encryption of data is used - y
 
 **Aux pins**
 
-The **AT dongle** has 8 aux pins that can be "manually" controlled or run PWM modulation (maximum frequency 1 kHz): "AT+AUX_PULSE=<pin:1-8>,<period_ms>,<duty%:0-100>"
+The **AT dongle** has 8 aux pins that can be "manually" controlled or run PWM modulation (maximum frequency 1 kHz): `AT+AUX_PULSE=<pin:1-8>,<period_ms>,<duty%:0-100>`
 
 **Status LEDs**
 The dongle has 3 LEDs serving these functions:
