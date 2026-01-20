@@ -12,13 +12,13 @@ When sending packets, no additional "wrapping" or encryption of data is used - y
 **For quick start:**
 
 **1)** Install driver according to your system: [Download drivers](https://www.silabs.com/interface/usb-bridges/classic/device.cp2102?tab=softwareandtools)
- 
- or
 
 **2)** Connect **AT dongle** to USB and set desired LoRa parameter configuration (or leave defaults)
+
 **3)** Send data via AT commands:
  - Send data in ASCII: ```AT+RF_TX_TXT=Hello, this is AT LoRa dongle Ropixon!```
  - Send data in HEX: ```AT+RF_TX_HEX=48656C6C6F2C2074686973206973204154204C6F526120646F6E676C6520526F7069786F6E21```
+   
 **4)** Reception is activated automatically - output format HEX/ASCII can be selected using `AT+RF_RX_FORMAT=HEX|ASCII, ?`
 
 
