@@ -1,6 +1,8 @@
 # Ropixon AT LoRa Dongle - User Manual
 
-**Ropixon AT-USB LoRa Dongle** enables sending and receiving all **LoRa** packets! Just configure it properly using intuitive **AT commands** via serial line.
+[![I sell on Tindie](https://d2ss6ovg47m0r5.cloudfront.net/badges/tindie-smalls.png)](https://www.tindie.com/products/nn_6394/at-lora-usb-dongle/)
+
+**Ropixon AT-USB LoRa Dongle** enables sending and receiving all **LoRa** packets! Just configure it properly using intuitive **AT commands** via serial line. 
 
 - No programming required.
 - It's suitable for rapid development, testing, or creating your own wireless LoRa link.
@@ -27,6 +29,8 @@ AT LoRa dongle has 8 aux pins - you can set its logical level or activate PWM on
 *AT LoRa Dongle - hardware overview*
 
 **For quick start:**
+
+**Device ready to use is Available on** [Tindie](https://www.tindie.com/products/nn_6394/at-lora-usb-dongle/).
 
 **1)** Install driver for serial interface CP2102 according to your system: [Download drivers](https://www.silabs.com/interface/usb-bridges/classic/device.cp2102?tab=softwareandtools)
  
