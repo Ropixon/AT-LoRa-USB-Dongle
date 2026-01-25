@@ -1,7 +1,5 @@
 # Ropixon AT LoRa Dongle - User Manual
 
-[![I sell on Tindie](https://d2ss6ovg47m0r5.cloudfront.net/badges/tindie-smalls.png)](https://www.tindie.com/products/nn_6394/at-lora-usb-dongle/)
-
 **Ropixon AT-USB LoRa Dongle** enables sending and receiving all **LoRa** packets! Just configure it properly using intuitive **AT commands** via serial line. 
 
 - No programming required.
@@ -442,6 +440,8 @@ for i in range(5):
 
 ser.close()
 ```
+
+[![I sell on Tindie](https://d2ss6ovg47m0r5.cloudfront.net/badges/tindie-smalls.png)](https://www.tindie.com/products/nn_6394/at-lora-usb-dongle/)
 
 ---
 
