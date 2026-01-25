@@ -1,0 +1,38 @@
+{
+    "files.associations": {
+        "freertos.h": "c",
+        "main.h": "c",
+        "portstm32l071xx.h": "c",
+        "main_task.h": "c",
+        "at_cmd.h": "c",
+        "log.h": "c",
+        "array": "c",
+        "string": "c",
+        "string_view": "c",
+        "portmacro.h": "c",
+        "radio_user.h": "c",
+        "nvma.h": "c",
+        "concepts": "cpp",
+        "cstdio": "cpp",
+        "type_traits": "cpp",
+        "new": "cpp",
+        "typeinfo": "cpp",
+        "compare": "c",
+        "rf_task.h": "c",
+        "rf_config.h": "c"
+    },
+    "cortex-debug.variableUseNaturalFormat": false,
+    "cmake.cmakePath": "cube-cmake",
+    "cmake.configureArgs": [
+        "-DCMAKE_COMMAND=cube-cmake"
+    ],
+    "cmake.preferredGenerators": [
+        "Ninja"
+    ],
+    "stm32cube-ide-clangd.path": "cube",
+    "stm32cube-ide-clangd.arguments": [
+        "starm-clangd",
+        "--query-driver=${env:CUBE_BUNDLE_PATH}/gnu-tools-for-stm32/13.3.1+st.9/bin/arm-none-eabi-gcc.exe",
+        "--query-driver=${env:CUBE_BUNDLE_PATH}/gnu-tools-for-stm32/13.3.1+st.9/bin/arm-none-eabi-g++.exe"
+    ]
+}
