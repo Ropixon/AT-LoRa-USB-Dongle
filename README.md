@@ -30,7 +30,7 @@ AT LoRa dongle has 8 aux pins - you can set its logical level or activate PWM on
 
 **For quick start:**
 
-**Device ready to use is Available on** [Tindie](https://www.tindie.com/products/nn_6394/at-lora-usb-dongle/).
+**Ready-to-use device available on [Tindie](https://www.tindie.com/products/nn_6394/at-lora-usb-dongle/).**
 
 **1)** Install driver for serial interface CP2102 according to your system: [Download drivers](https://www.silabs.com/interface/usb-bridges/classic/device.cp2102?tab=softwareandtools)
  
