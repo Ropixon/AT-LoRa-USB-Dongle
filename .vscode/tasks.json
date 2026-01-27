@@ -52,6 +52,18 @@
                 "J-Link: Flash project",
             ]
         },
+        {
+            "label": "Flash Only (J-Link)",
+            "dependsOn": [
+                "J-Link: Flash project"
+            ]
+        },
+        {
+            "label": "Flash Only (SWD/CubeProg)",
+            "dependsOn": [
+                "CubeProg: Flash project (SWD)"
+            ]
+        },
                 {
             "type": "cmake",
             "label": "CMake: clean rebuild",
