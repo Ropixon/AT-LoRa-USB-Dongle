@@ -38,14 +38,14 @@ TARGET_BAUD_RATE = 230400  # Target baud rate to set after detection (max suppor
 TIMEOUT = 5.0  # seconds
 
 # RF Parameters to test
-SF_RANGE = range(5, 13)  # SF5 to SF12
-BW_OPTIONS = [6, 9]  # All bandwidth options
+SF_RANGE = [ 7,8,9]  # SF5 to SF12
+BW_OPTIONS = [6,7]  # All bandwidth options
 # BW mapping: 0=7.81kHz, 1=10.42kHz, 2=15.63kHz, 3=20.83kHz, 4=31.25kHz, 
 #             5=41.67kHz, 6=62.5kHz, 7=125kHz, 8=250kHz, 9=500kHz
 
 CR_OPTIONS = [45]  # Coding rates: 4/5, 4/6, 4/7, 4/8
-IQ_INV_OPTIONS = [0]  # IQ inversion: 0=normal (testujeme pouze bez inverze)
-HEADER_MODE_OPTIONS = [0]  # Header mode: 0=explicit, 1=implicit
+IQ_INV_OPTIONS = [0,1]  # IQ inversion: 0=normal (testujeme pouze bez inverze)
+HEADER_MODE_OPTIONS = [0,1]  # Header mode: 0=explicit, 1=implicit
 CRC_OPTIONS = [ 1]  # CRC: 0=disabled, 1=enabled
 PREAMBLE_OPTIONS = [16]  # Preamble length in symbols (can add: 8, 16, 32, etc.)
 
