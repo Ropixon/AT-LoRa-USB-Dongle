@@ -105,9 +105,9 @@ const AT_Command_Struct AT_Commands[] = {
     {"AT+RF_GET_TSYM",              NULL,               SYS_CMD_RF_GET_TSYM,                 "AT+RF_GET_TSYM - Get symbol time in us (TX config)", ""},
     
     /* AUX GPIO commands */
-    {"AT+AUX",            NULL, SYS_CMD_AUX_SET,   "Set AUX pin state", "=<pin:1-8>,<state:0|1>"},
-    {"AT+AUX_PULSE",      NULL, SYS_CMD_AUX_PULSE, "Start PWM on AUX pin", "=<pin:1-8>,<period_ms>,<duty%:0-100>"},
-    {"AT+AUX_PULSE_STOP", NULL, SYS_CMD_AUX_STOP,  "Stop PWM on AUX pin", "=<pin:1-8>"},
+    {"AT+AUX",            NULL, SYS_CMD_AUX_SET,   "AT+AUX - Set AUX pin state", "=<pin:1-8>,<state:0|1>"},
+    {"AT+AUX_PULSE",      NULL, SYS_CMD_AUX_PULSE, "AT+AUX_PULSE - Start PWM on AUX pin", "=<pin:1-8>,<period_ms>,<duty%:0-100>"},
+    {"AT+AUX_PULSE_STOP", NULL, SYS_CMD_AUX_STOP,  "AT+AUX_PULSE_STOP - Stop PWM on AUX pin", "=<pin:1-8>"},
     /* System commands */
     {"AT+UART_BAUD",                NULL,               SYS_CMD_UART_BAUD,                   "AT+UART_BAUD - Set UART baud rate", "=9600|19200|38400|57600|115200|230400, ?"},
     
@@ -382,9 +382,10 @@ static void AT_HandleIdentify(char *params)
     // Formátování unique ID jako hexadecimální řetězec (96 bitů = 24 hex znaků)
     sprintf(uid_str, "%08lX%08lX%08lX", (unsigned long)uid2, (unsigned long)uid1, (unsigned long)uid0);
     
-    // Odeslání odpovědi: Device Name, Version a Unique ID
-    char info_str[64];
-    snprintf(info_str, sizeof(info_str), "%s v%d.%d.%d UID:", FW_DEVICE_NAME, FW_VERSION_MAJOR, FW_VERSION_MINOR, FW_VERSION_PATCH);
+    // Odeslání odpovědi: Device Name, Version, Build Date a Unique ID (CSV formát pro snadné parsování)
+    char info_str[128];
+    snprintf(info_str, sizeof(info_str), "%s, v%d.%d.%d, Build: %s %s, UID: ",
+             FW_DEVICE_NAME, FW_VERSION_MAJOR, FW_VERSION_MINOR, FW_VERSION_PATCH, __DATE__, __TIME__);
     AT_SendStringResponse(info_str);
     AT_SendStringResponse(uid_str);
     AT_SendStringResponse("\r\n");
