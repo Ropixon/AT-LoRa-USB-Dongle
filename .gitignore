@@ -25,3 +25,7 @@ tmpclaude-*-cwd
 
 .claude/
 /__pycache__
+
+AT_LORA_DONGLE_MANUAL_EN.html
+
+.vscode/c_cpp_properties.json
