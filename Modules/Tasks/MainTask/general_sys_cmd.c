@@ -1596,7 +1596,14 @@ bool GSC_ProcessCommand(eATCommands cmd, uint8_t *data, uint16_t size)
 
         case SYS_CMD_RF_RX_TO_UART:
         {
-            if(_GSC_Handle_RX_TO_UART(data, size) == false)
+            if (isQuery)
+            {
+                uint8_t rxToUart;
+                NVMA_Get_RX_TO_UART(&rxToUart);
+                AT_FormatUint8Response(rxToUart, (uint8_t *)response, &response_size);
+                hasResponse = true;
+            }
+            else if(_GSC_Handle_RX_TO_UART(data, size) == false)
             {
                 AT_SendStringResponse("ERROR: Invalid RX_TO_UART value\r\n");
                 commandHandled = false;
