@@ -666,16 +666,28 @@ void ru_radio_process_IRQ(radio_context_t *ctx)
 
 	mode = ru_get_radio_last_status(ctx);
 	ral_get_irq_status(ral, &irqSet);
+	ral_clear_irq_status(ral, RAL_IRQ_ALL);   /* clear immediately - prevents stale RX_DONE on next spurious EXTI */
 
 	switch (mode)
 	{
 		case RF_MODE_RX:
-	
-		    if (((irqSet & RAL_IRQ_RX_DONE) == RAL_IRQ_RX_DONE) && ((irqSet & RAL_IRQ_RX_CRC_ERROR) != RAL_IRQ_RX_CRC_ERROR))
+
+		    if (((irqSet & RAL_IRQ_RX_DONE)      == RAL_IRQ_RX_DONE) &&
+		        ((irqSet & RAL_IRQ_RX_CRC_ERROR) != RAL_IRQ_RX_CRC_ERROR) &&
+		        ((irqSet & RAL_IRQ_RX_HDR_ERROR) != RAL_IRQ_RX_HDR_ERROR))
 		    {
 		    	if(ral_get_pkt_payload(ral,MAX_SIZE_RADIO_BUFFER,rxPayload,&rxSize) == RAL_STATUS_OK)
 		    	{
-					ral_get_rssi_inst(ral, &RSSI);	
+					ral_lora_rx_pkt_status_t pktStatus;
+					if (ral_get_lora_rx_pkt_status(ral, &pktStatus) == RAL_STATUS_OK)
+					{
+						RSSI = pktStatus.rssi_pkt_in_dbm;
+					}
+					else
+					{
+						_exit(3515321352);
+					}
+					
 					LOG_INFO("RX: %d B, RSSI: %d dBm", rxSize, (int16_t)RSSI);
 
 					if(ctx->rx_to_uart == true && rxSize > 0)
@@ -704,6 +716,10 @@ void ru_radio_process_IRQ(radio_context_t *ctx)
 					
 		    	}
 		    }
+			else if(irqSet & RAL_IRQ_RX_HDR_ERROR)
+			{
+				LOG_DEBUG("Semtech HDR Error (irq=0x%04X) - stale buffer ignored", irqSet);
+			}
 			else if(irqSet & RAL_IRQ_RX_CRC_ERROR)
 			{
 				LOG_DEBUG("Semtech CRC Error");

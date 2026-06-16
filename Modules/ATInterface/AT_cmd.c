@@ -382,10 +382,13 @@ static void AT_HandleIdentify(char *params)
     // Formátování unique ID jako hexadecimální řetězec (96 bitů = 24 hex znaků)
     sprintf(uid_str, "%08lX%08lX%08lX", (unsigned long)uid2, (unsigned long)uid1, (unsigned long)uid0);
     
-    // Odeslání odpovědi: Device Name, Version, Build Date a Unique ID (CSV formát pro snadné parsování)
-    char info_str[128];
-    snprintf(info_str, sizeof(info_str), "%s, v%d.%d.%d, Build: %s %s, UID: ",
-             FW_DEVICE_NAME, FW_VERSION_MAJOR, FW_VERSION_MINOR, FW_VERSION_PATCH, __DATE__, __TIME__);
+    char info_str[160];
+    snprintf(info_str, sizeof(info_str),
+             "%s, FW: v%d.%d.%d, HW: %s %s %s, Build: %s %s, UID: ",
+             FW_DEVICE_NAME,
+             FW_VERSION_MAJOR, FW_VERSION_MINOR, FW_VERSION_PATCH,
+             HW_RF_FREQ_BAND, HW_RF_OSC_TYPE, HW_BOARD_VERSION_STRING,
+             __DATE__, __TIME__);
     AT_SendStringResponse(info_str);
     AT_SendStringResponse(uid_str);
     AT_SendStringResponse("\r\n");

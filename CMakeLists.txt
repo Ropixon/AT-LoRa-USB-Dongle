@@ -146,3 +146,16 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 
     # Add user defined libraries
 )
+
+# Output binary name: AT_LoRa_Dongle-<variant>-<board_rev>-<build_type>
+# e.g. AT_LoRa_Dongle-868_XTAL-1_0-Release
+string(TOLOWER "${HW_VARIANT}" HW_VARIANT_LOWER)
+string(REPLACE "_" "-" HW_VARIANT_LOWER "${HW_VARIANT_LOWER}")
+string(TOLOWER "${CMAKE_BUILD_TYPE}" BUILD_TYPE_LOWER)
+set(OUTPUT_NAME "AT_LoRa_Dongle-${HW_VARIANT_LOWER}-v${HW_BOARD_REV}-${BUILD_TYPE_LOWER}")
+
+add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_OBJCOPY} -O ihex   $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_BINARY_DIR}/${OUTPUT_NAME}.hex
+    COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_BINARY_DIR}/${OUTPUT_NAME}.bin
+    COMMENT "Generating ${OUTPUT_NAME}.hex / .bin"
+)
