@@ -54,7 +54,7 @@ The dongle has 3 LEDs serving these functions:
 
 **Aux pins**
 
-The **AT dongle** has 8 aux pins that can be "manually" controlled or run PWM modulation (maximum frequency 1 kHz): `AT+AUX_PULSE=<pin:1-8>,<period_ms>,<duty%:0-100>`
+The **AT dongle** has 8 aux pins that can be "manually" controlled or run PWM modulation: `AT+AUX_PULSE=<pin:1-8>,<freq_hz>,<duty%:0-100>`. Pins 7-8 use a hardware PWM timer (up to 320 kHz); pins 1-6 use a software timer (up to 500 Hz).
 
 ### Main Features
 
@@ -74,11 +74,13 @@ The **AT dongle** has 8 aux pins that can be "manually" controlled or run PWM mo
 
 ### AUX Pins
 
-The dongle has 8 auxiliary pins that can be manually controlled or run PWM modulation (max frequency 1 kHz):
+The dongle has 8 auxiliary pins that can be manually controlled or run PWM modulation:
 
 ```
-AT+AUX_PULSE=<pin:1-8>,<period_ms>,<duty%:0-100>
+AT+AUX_PULSE=<pin:1-8>,<freq_hz>,<duty%:0-100>
 ```
+
+Pins 7-8 (aux7/aux8) are driven by a dedicated hardware PWM timer and support frequencies from 1 Hz up to 320 kHz. Pins 1-6 are driven by a FreeRTOS software timer, limited to 1-500 Hz; requested duty cycles are rounded to the nearest value representable in whole RTOS ticks (a `WARN: duty rounded to X%` response is sent when rounding occurs).
 
 ---
 
@@ -124,7 +126,7 @@ Send `AT` or `AT+HELP` - dongle will respond with a list of all available comman
 
 Send `AT+IDENTIFY` - dongle will respond with device identification:
 ```
-Ropixon AT-USB LoRa_Dongle v1.0.0 UID:xxxxxxx.......
+Ropixon AT-USB LoRa Dongle, FW: v1.1.0, HW: <freq_band> <osc_type> v1.0, Build: <date> <time>, UID: xxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ---
@@ -233,7 +235,7 @@ Store one packet in NVM memory for later or periodic transmission:
 | Command | Description | Example |
 |---------|-------------|---------|
 | `AT+AUX` | Set pin state | `AT+AUX=1,1` (pin 1 HIGH) |
-| `AT+AUX_PULSE` | Start PWM | `AT+AUX_PULSE=1,1000,50` (1 Hz, 50% duty) |
+| `AT+AUX_PULSE` | Start PWM | `AT+AUX_PULSE=1,1,50` (1 Hz, 50% duty) |
 | `AT+AUX_PULSE_STOP` | Stop PWM | `AT+AUX_PULSE_STOP=1` |
 
 ---
