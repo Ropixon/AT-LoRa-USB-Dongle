@@ -72,19 +72,19 @@
  * Board Revision Selection
  * ============================================================================ */
 
+#ifndef HW_BOARD_REV_0_0
 #ifndef HW_BOARD_REV_1_0
-#ifndef HW_BOARD_REV_2_0
-    // No board revision defined, use default
+    // No board revision defined, use default (current production board, not the obsolete v0.0 proto)
     #define HW_BOARD_REV_1_0
     #pragma message "No board revision defined, using default: v1.0"
 #endif
 #endif
 
 /* Include board-specific pin definitions */
-#if defined(HW_BOARD_REV_1_0)
+#if defined(HW_BOARD_REV_0_0)
+    #include "hw_boards/hw_board_v0_0.h"
+#elif defined(HW_BOARD_REV_1_0)
     #include "hw_boards/hw_board_v1_0.h"
-#elif defined(HW_BOARD_REV_2_0)
-    #include "hw_boards/hw_board_v2_0.h"
 #else
     #error "No board revision defined!"
 #endif

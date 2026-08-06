@@ -39,11 +39,11 @@ TIMEOUT = 5.0  # seconds
 
 # RF Parameters to test
 SF_RANGE = [ 7,8,9]  # SF5 to SF12
-BW_OPTIONS = [6,7]  # All bandwidth options
+BW_OPTIONS = [6,7, 8]  # All bandwidth options
 # BW mapping: 0=7.81kHz, 1=10.42kHz, 2=15.63kHz, 3=20.83kHz, 4=31.25kHz, 
 #             5=41.67kHz, 6=62.5kHz, 7=125kHz, 8=250kHz, 9=500kHz
 
-CR_OPTIONS = [45]  # Coding rates: 4/5, 4/6, 4/7, 4/8
+CR_OPTIONS = [45, 47]  # Coding rates: 4/5, 4/6, 4/7, 4/8
 IQ_INV_OPTIONS = [0,1]  # IQ inversion: 0=normal (testujeme pouze bez inverze)
 HEADER_MODE_OPTIONS = [0,1]  # Header mode: 0=explicit, 1=implicit
 CRC_OPTIONS = [ 1]  # CRC: 0=disabled, 1=enabled
@@ -501,24 +501,26 @@ class ATLoraDongle:
     
     def set_aux_gpio(self, pin: int, state: str) -> bool:
         """Set AUX GPIO pin state
-        
+
         Args:
             pin: Pin number (1-8)
-            state: "ON" or "OFF"
+            state: "1" (ON) or "0" (OFF)
         """
         cmd = f"AT+AUX={pin},{state}"
         success, _ = self.send_command(cmd)
         return success
-    
-    def set_aux_pwm(self, pin: int, period_ms: int, duty_pct: int) -> bool:
+
+    def set_aux_pwm(self, pin: int, freq_hz: int, duty_pct: int) -> bool:
         """Set AUX GPIO pin PWM
-        
+
         Args:
             pin: Pin number (1-8)
-            period_ms: Period in milliseconds
+            freq_hz: PWM frequency in Hz. aux1-6 (SW timer): 1-(tick_rate/2),
+                     i.e. 1-500 Hz on the default 1000 Hz tick rate. aux7/aux8
+                     (HW PWM): 1-320000 Hz.
             duty_pct: Duty cycle percentage (0-100)
         """
-        cmd = f"AT+AUX_PULSE={pin},{period_ms},{duty_pct}"
+        cmd = f"AT+AUX_PULSE={pin},{freq_hz},{duty_pct}"
         success, _ = self.send_command(cmd)
         return success
     
@@ -758,7 +760,7 @@ def test_eeprom_storage(tx_dongle: ATLoraDongle, rx_dongle: ATLoraDongle) -> boo
         logger.warning("  ! AT+AUX basic control není implementováno (to je OK, jen PWM je důležité)")
     
     # Test PWM on one pin
-    if tx_dongle.set_aux_pwm(1, 1000, 50):  # 1Hz, 50% duty
+    if tx_dongle.set_aux_pwm(1, 1, 50):  # 1Hz, 50% duty
         logger.info("  ✓ AUX1 PWM started (1Hz, 50%)")
         if tx_dongle.stop_aux_pwm(1):
             logger.info("  ✓ AUX1 PWM stopped")

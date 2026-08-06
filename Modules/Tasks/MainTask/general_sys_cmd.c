@@ -1949,7 +1949,7 @@ static bool _GSC_Handle_AUX_PIN_PWM(uint8_t *data, uint8_t size)
 {
     (void)size;
     uint8_t pin, duty;
-    uint16_t period;
+    uint32_t period;
 
     // Oddělení tokenů
     char *token = strtok((char*)data, ",");
@@ -1963,8 +1963,12 @@ static bool _GSC_Handle_AUX_PIN_PWM(uint8_t *data, uint8_t size)
     }
     pin -= 1; // uživatel zadává 1-8, indexujeme 0-7
 
+    uint32_t fmin = AUX_IsHwPwmPin(pin) ? AUX_PWM_HW_MIN_FREQ_HZ : AUX_PWM_SW_MIN_FREQ_HZ;
+    uint32_t fmax = AUX_IsHwPwmPin(pin) ? AUX_PWM_HW_MAX_FREQ_HZ : AUX_PWM_SW_MAX_FREQ_HZ;
+
     token = strtok(NULL, ",");
-    if (!token || !AT_ParseUint16((uint8_t*)token, &period, 5) || period == 0)
+    if (!token || !AT_ParseUint32((uint8_t*)token, &period, 6)
+        || period < fmin || period > fmax)
         return false;
 
     token = strtok(NULL, ",");
@@ -1974,6 +1978,20 @@ static bool _GSC_Handle_AUX_PIN_PWM(uint8_t *data, uint8_t size)
     // Pokud je další token, chyba
     if (strtok(NULL, ",") != NULL)
         return false;
+
+    // Na SW enginu (aux1-6) se duty zaokrouhlí na nejbližší hodnotu, kterou lze
+    // reprezentovat celým počtem RTOS ticků (fáze nemůže být kratší než 1 tick).
+    // Uživatel je o zaokrouhlení informován, příkaz ale i tak uspěje.
+    if (!AUX_IsHwPwmPin(pin))
+    {
+        uint8_t roundedDuty = AUX_SwPwm_RoundDuty(period, duty);
+        if (roundedDuty != duty)
+        {
+            char msg[64];
+            snprintf(msg, sizeof(msg), "WARN: duty rounded to %u%%\r\n", roundedDuty);
+            AT_SendStringResponse(msg);
+        }
+    }
 
     // Spuštění PWM na daném pinu
     AUX_StartPWM(pin, period, duty);

@@ -11,9 +11,9 @@ This directory contains board-specific hardware definitions for different revisi
 
 ## Why Complete Pin Definitions?
 
-When you create v2.0 hardware and regenerate STM32CubeMX:
-1. main.h gets updated with v2.0 pins
-2. v1.0 builds continue working because hw_board_v1_0.h has frozen v1.0 pins
+When you create a new hardware revision and regenerate STM32CubeMX:
+1. main.h gets updated with the new revision's pins
+2. Older builds continue working because their hw_board_vX_Y.h has frozen pins
 3. Each board file is independent and CubeMX-proof
 
 ## Adding a New Board Revision
@@ -25,30 +25,30 @@ When you create v2.0 hardware and regenerate STM32CubeMX:
 5. Update `hw_config.h` to include the new board
 6. Add to `CMakeLists.txt` and `CMakePresets.json`
 
-## Example: hw_board_v2_0.h
+## Example: hw_board_v1_0.h
 
 ```c
-#define HW_BOARD_VERSION_STRING "v2.0"
+#define HW_BOARD_VERSION_STRING "v1.0"
 
 /* ALL pins defined with #undef first */
 #undef SX1262_RF_SW_Pin
 #undef SX1262_RF_SW_GPIO_Port
-#define SX1262_RF_SW_Pin GPIO_PIN_8     // ← Changed from PB12
-#define SX1262_RF_SW_GPIO_Port GPIOA     // ← Changed from GPIOB
+#define SX1262_RF_SW_Pin GPIO_PIN_12    // ← Changed from PA8
+#define SX1262_RF_SW_GPIO_Port GPIOB     // ← Changed from GPIOA
 
 #undef LED_GREEN_Pin
 #undef LED_GREEN_GPIO_Port
-#define LED_GREEN_Pin GPIO_PIN_15        // Unchanged
+#define LED_GREEN_Pin GPIO_PIN_14        // Changed
 #define LED_GREEN_GPIO_Port GPIOB        // Unchanged
 ```
 
 ## STM32CubeMX Workflow
 
-### When creating v2.0:
+### When creating a new revision:
 1. Update .ioc file with new pins
 2. Generate code → main.h updated
-3. Create hw_board_v2_0.h with ALL pins from new main.h
-4. v1.0 continues working with frozen pins in hw_board_v1_0.h
+3. Create hw_board_vX_Y.h with ALL pins from new main.h
+4. Older revisions continue working with their frozen pin files
 
 ✅ Each board revision is independent
 ✅ CubeMX regeneration won't break old builds
@@ -56,5 +56,5 @@ When you create v2.0 hardware and regenerate STM32CubeMX:
 
 ## Current Boards
 
-- **v1.0**: Original hardware (PB12 for RF_SW)
-- **v2.0**: Updated hardware (PA8 for RF_SW)
+- **v0.0**: Original black-PCB prototype (PA8 for RF_SW, no RED LED) — **obsolete, no longer manufactured or used**. Kept only for reference.
+- **v1.0**: Current production hardware (PB12 for RF_SW, adds RED LED)

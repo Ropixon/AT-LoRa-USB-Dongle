@@ -40,18 +40,20 @@ endif()
 message(STATUS "Using hardware define: ${HW_DEFINE}")
 
 # Board revision selection
-set(HW_BOARD_REV "1_0" CACHE STRING "Board revision: 1_0, 2_0")
-set_property(CACHE HW_BOARD_REV PROPERTY STRINGS "1_0" "2_0")
+# 0_0 = original black-PCB prototype (obsolete, no longer used)
+# 1_0 = current production board
+set(HW_BOARD_REV "1_0" CACHE STRING "Board revision: 0_0, 1_0")
+set_property(CACHE HW_BOARD_REV PROPERTY STRINGS "0_0" "1_0")
 
 message(STATUS "Board revision: ${HW_BOARD_REV}")
 
 # Map board revision to preprocessor define
-if(HW_BOARD_REV STREQUAL "1_0")
+if(HW_BOARD_REV STREQUAL "0_0")
+    set(HW_BOARD_DEFINE "HW_BOARD_REV_0_0")
+elseif(HW_BOARD_REV STREQUAL "1_0")
     set(HW_BOARD_DEFINE "HW_BOARD_REV_1_0")
-elseif(HW_BOARD_REV STREQUAL "2_0")
-    set(HW_BOARD_DEFINE "HW_BOARD_REV_2_0")
 else()
-    message(FATAL_ERROR "Invalid HW_BOARD_REV: ${HW_BOARD_REV}. Must be one of: 1_0, 2_0")
+    message(FATAL_ERROR "Invalid HW_BOARD_REV: ${HW_BOARD_REV}. Must be one of: 0_0, 1_0")
 endif()
 
 message(STATUS "Using board define: ${HW_BOARD_DEFINE}")

@@ -17,6 +17,7 @@
 #include "Main_task.h"
 #include "semphr.h"
 #include "NVMA.h"
+#include "auxPin_logic.h"
 
 
 /**
@@ -106,7 +107,7 @@ const AT_Command_Struct AT_Commands[] = {
     
     /* AUX GPIO commands */
     {"AT+AUX",            NULL, SYS_CMD_AUX_SET,   "AT+AUX - Set AUX pin state", "=<pin:1-8>,<state:0|1>"},
-    {"AT+AUX_PULSE",      NULL, SYS_CMD_AUX_PULSE, "AT+AUX_PULSE - Start PWM on AUX pin", "=<pin:1-8>,<period_ms>,<duty%:0-100>"},
+    {"AT+AUX_PULSE",      NULL, SYS_CMD_AUX_PULSE, "AT+AUX_PULSE - Start PWM on AUX pin", "=<pin:1-8>,<freq_hz:1-(tick_rate/2) aux1-6 [SW timer, duty may be rounded near 0/100%, see WARN], 1-320000 aux7/8 [HW PWM]>,<duty%:0-100>"},
     {"AT+AUX_PULSE_STOP", NULL, SYS_CMD_AUX_STOP,  "AT+AUX_PULSE_STOP - Stop PWM on AUX pin", "=<pin:1-8>"},
     /* System commands */
     {"AT+UART_BAUD",                NULL,               SYS_CMD_UART_BAUD,                   "AT+UART_BAUD - Set UART baud rate", "=9600|19200|38400|57600|115200|230400, ?"},
