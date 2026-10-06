@@ -49,7 +49,7 @@ The dongle has 3 LEDs serving these functions:
 
 **Aux pins**
 
-The **AT dongle** has 8 aux pins that can be "manually" controlled or run PWM modulation (maximum frequency 1 kHz): `AT+AUX_PULSE=<pin:1-8>,<period_ms>,<duty%:0-100>`
+The **AT dongle** has 8 aux pins that can be "manually" controlled or run PWM modulation: `AT+AUX_PULSE=<pin:1-8>,<freq_hz>,<duty%:0-100>`. Pins 7-8 use a hardware PWM timer (up to 320 kHz); pins 1-6 use a software timer (up to 500 Hz).
 
 ### Main Features
 
@@ -69,11 +69,13 @@ The **AT dongle** has 8 aux pins that can be "manually" controlled or run PWM mo
 
 ### AUX Pins
 
-The dongle has 8 auxiliary pins that can be manually controlled or run PWM modulation (max frequency 1 kHz):
+The dongle has 8 auxiliary pins that can be manually controlled or run PWM modulation:
 
 ```
-AT+AUX_PULSE=<pin:1-8>,<period_ms>,<duty%:0-100>
+AT+AUX_PULSE=<pin:1-8>,<freq_hz>,<duty%:0-100>
 ```
+
+Pins 7-8 (aux7/aux8) are driven by a dedicated hardware PWM timer and support frequencies from 1 Hz up to 320 kHz. Pins 1-6 are driven by a FreeRTOS software timer, limited to 1-500 Hz; requested duty cycles are rounded to the nearest value representable in whole RTOS ticks (a `WARN: duty rounded to X%` response is sent when rounding occurs).
 
 ---
 
@@ -119,7 +121,7 @@ Send `AT` or `AT+HELP` - dongle will respond with a list of all available comman
 
 Send `AT+IDENTIFY` - dongle will respond with device identification:
 ```
-Ropixon AT-USB LoRa_Dongle v1.0.0 UID:xxxxxxx.......
+Ropixon AT-USB LoRa Dongle, FW: v1.1.0, HW: <freq_band> <osc_type> v1.0, Build: <date> <time>, UID: xxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ---
@@ -133,9 +135,16 @@ Ropixon AT-USB LoRa_Dongle v1.0.0 UID:xxxxxxx.......
 | `AT` | Print help | `AT` |
 | `AT+HELP` | Display all available commands | `AT+HELP` |
 | `AT+IDENTIFY` | Return unique device ID | `AT+IDENTIFY` |
+| `AT+CAPS` | List firmware capabilities | `AT+CAPS` |
 | `AT+FACTORY_RST` | Reset to factory defaults and restart | `AT+FACTORY_RST` |
 | `AT+SYS_RESTART` | System restart | `AT+SYS_RESTART` |
 | `AT+UART_BAUD` | Set/query baud rate (restarts on change) | `AT+UART_BAUD=230400` |
+
+**Capabilities (`AT+CAPS`)** - one line, comma-separated tokens, no spaces, no trailing `OK`:
+```
++CAPS:HOST_V1,TX_DONE,RX_TO_UART,RX_FORMAT,TX_SAVED,TX_CW,TOA,AUX,AUX_PWM_HW,UART_BAUD
+```
+`HOST_V1` is always present and marks support of host protocol v1 (required by the Python host driver). Host applications should search for individual tokens rather than compare the whole line.
 
 ### LoRa TX Parameters
 
@@ -203,6 +212,12 @@ AT+LR_RX_SET=SF:7,BW:7,CR:45,Freq:869525000,IQInv:0,HeaderMode:0,CRC:1,Preamble:
 ```
 Example: `+RX:5,48656C6C6F,RSSI:-45` (5 bytes, data "Hello" in hex, RSSI -45 dBm)
 
+**Transmission finished:**
+```
+TX:DONE
+```
+Sent asynchronously after every completed RF transmission (`AT+RF_TX_HEX`, `AT+RF_TX_TXT`, `AT+RF_TX_SAVED` and each packet of `AT+RF_TX_SAVED_REPEAT`).
+
 ### Saved Packets and Periodic Transmission
 
 Store one packet in NVM memory for later or periodic transmission:
@@ -228,7 +243,7 @@ Store one packet in NVM memory for later or periodic transmission:
 | Command | Description | Example |
 |---------|-------------|---------|
 | `AT+AUX` | Set pin state | `AT+AUX=1,1` (pin 1 HIGH) |
-| `AT+AUX_PULSE` | Start PWM | `AT+AUX_PULSE=1,1000,50` (1 Hz, 50% duty) |
+| `AT+AUX_PULSE` | Start PWM | `AT+AUX_PULSE=1,1,50` (1 Hz, 50% duty) |
 | `AT+AUX_PULSE_STOP` | Stop PWM | `AT+AUX_PULSE_STOP=1` |
 
 ---

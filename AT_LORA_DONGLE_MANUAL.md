@@ -20,7 +20,7 @@ Pro vysoké přenosové rychlosti volte vysoké BW a nízké SF - tím se však 
 
 **Aux pins**
 
-Zařízení má 8 aux pinů, které je možné "ručně" ovládat, nebo na nich pustit PWM modulace (maximální freknence 1 KHz): "AT+AUX_PULSE=<pin:1-8>,<period_ms>,<duty%:0-100>"
+Zařízení má 8 aux pinů, které je možné "ručně" ovládat, nebo na nich pustit PWM modulaci: "AT+AUX_PULSE=<pin:1-8>,<freq_hz>,<duty%:0-100>". Piny 7-8 jedou na HW PWM timeru (do 320 kHz), piny 1-6 na SW timeru (do 500 Hz).
 
 **Stavové LED**
 Dongle má 3 LED, které plní tyto fce:
@@ -65,7 +65,7 @@ Dongle odpoví výpisem všech dostupných příkazů.
 ```
 AT+IDENTIFY
 ```
-Dongle odpoví "Ropixon AT-USB LoRa_Dongle v1.0.0 UID:xxxxxxx......."
+Dongle odpoví "Ropixon AT-USB LoRa Dongle, FW: v1.1.0, HW: <freq_band> <osc_type> v1.0, Build: <datum> <čas>, UID: xxxxxxxxxxxxxxxxxxxxxxxx"
 
 ---
 
@@ -78,9 +78,16 @@ Dongle odpoví "Ropixon AT-USB LoRa_Dongle v1.0.0 UID:xxxxxxx......."
 | `AT` | Vypíše help | `AT` |
 | `AT+HELP` | Zobrazí všechny dostupné příkazy | `AT+HELP` |
 | `AT+IDENTIFY` | Vrátí unique device ID | `AT+IDENTIFY` |
+| `AT+CAPS` | Vypíše schopnosti firmware | `AT+CAPS` |
 | `AT+FACTORY_RST` | Reset na tovární veškerého nastavení a následný restart | `AT+FACTORY_RST` |
 | `AT+SYS_RESTART` | Restart systému | `AT+SYS_RESTART` |
 | `AT+UART_BAUD` | Nastavení/dotaz baud rate, při nastavení se provede restart | `AT+UART_BAUD=230400` |
+
+**Schopnosti firmware (`AT+CAPS`)** - jeden řádek, tokeny oddělené čárkou, bez mezer, bez `OK` na konci:
+```
++CAPS:HOST_V1,TX_DONE,RX_TO_UART,RX_FORMAT,TX_SAVED,TX_CW,TOA,AUX,AUX_PWM_HW,UART_BAUD
+```
+`HOST_V1` je vždy přítomen a označuje podporu host protokolu v1 (vyžaduje ho Python driver). Host aplikace má hledat jednotlivé tokeny, ne porovnávat celý řádek.
 
 ### LoRa TX parametry (vysílání)
 
@@ -156,6 +163,12 @@ Formát výpisu přijatých dat
 ```
 Kde 5 = pocet prijatých bajtu, 48656C6C6F = samotný paket, -45 = RSSI paketu
 
+**Dokončení vysílání** se oznámí automaticky:
+```
+TX:DONE
+```
+Vypíše se po každém dokončeném RF vysílání (`AT+RF_TX_HEX`, `AT+RF_TX_TXT`, `AT+RF_TX_SAVED` a každý paket z `AT+RF_TX_SAVED_REPEAT`).
+
 ### Uložené pakety a periodické vysílání
 Do AT dongelu je možné uložit jeden paket (NVMA pamět), ten je pak možné kdykoliv odeslat, nebo nastavit periodické odesílání
 | Příkaz | Popis | Příklad |
@@ -180,7 +193,7 @@ Pro různé testovací účely se mohou hodit tyto 3 příkazi, obzvláště "AT
 | Příkaz | Popis | Příklad |
 |--------|-------|---------|
 | `AT+AUX` | Nastavit stav pinu | `AT+AUX=1,1` (pin 1 HIGH) |
-| `AT+AUX_PULSE` | Start PWM | `AT+AUX_PULSE=1,1000,50` (pin 1, 1Hz, duty 50%) |
+| `AT+AUX_PULSE` | Start PWM | `AT+AUX_PULSE=1,1,50` (pin 1, 1Hz, duty 50%) |
 | `AT+AUX_PULSE_STOP` | Stop PWM | `AT+AUX_PULSE_STOP=1` (stop PWM on  pin 1) |
 
 ---

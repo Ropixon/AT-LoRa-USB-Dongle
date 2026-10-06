@@ -29,6 +29,7 @@ static void AT_HandleFactoryReset(char *params);
 static void AT_HandleHelp(char *params);
 static void AT_HandleRestartSys(char *params);
 static void AT_HandleIdentify(char *params);
+static void AT_HandleCaps(char *params);
 
 extern UART_HandleTypeDef huart1;
 extern osMessageQueueId_t queueMainHandle;
@@ -58,7 +59,8 @@ const AT_Command_Struct AT_Commands[] = {
     {"AT",                       AT_HandleHelp,          0,                                 "AT - Basic test command",                         ""},
     {"AT+HELP",                  AT_HandleHelp,          0,                                 "AT+HELP - List all supported commands",           ""},
     {"AT+IDENTIFY",              AT_HandleIdentify,      0,                                 "AT+IDENTIFY - Identify the device (returns unique ID)",               ""},
-    {"AT+FACTORY_RST",           AT_HandleFactoryReset,  0,                                 "AT+FACTORY_RST - Reset all settings to defaults",      ""},
+    {"AT+CAPS",                  AT_HandleCaps,          0,                                 "AT+CAPS - List firmware capabilities",            ""},
+    {"AT+FACTORY_RST",          AT_HandleFactoryReset,  0,                                 "AT+FACTORY_RST - Reset all settings to defaults",      ""},
     {"AT+SYS_RESTART",           AT_HandleRestartSys,    0,                                 "AT+SYS_RESTART - Restart the system",             ""},
     /* single LoRa params*/
     {"AT+LR_TX_FREQ",                NULL,               SYS_CMD_TX_FREQ,                     "AT+LR_TX_FREQ - Set TX frequency",                "=<frequency_in_Hz>, ?"},
@@ -301,6 +303,7 @@ static void AT_HandleHelp(char *params)
             strcmp(AT_Commands[i].command, "AT") == 0 ||
             strcmp(AT_Commands[i].command, "AT+HELP") == 0 ||
             strcmp(AT_Commands[i].command, "AT+IDENTIFY") == 0 ||
+            strcmp(AT_Commands[i].command, "AT+CAPS") == 0 ||
             strcmp(AT_Commands[i].command, "AT+FACTORY_RST") == 0 ||
             strcmp(AT_Commands[i].command, "AT+SYS_RESTART") == 0 ||
             strcmp(AT_Commands[i].command, "AT+UART_BAUD") == 0
@@ -357,6 +360,11 @@ static void AT_HandleHelp(char *params)
         }
     }
 
+    // Asynchronni notifikace (nejsou to prikazy)
+    AT_SendStringResponse("\r\n--- Async notifications ---\r\n");
+    AT_SendStringResponse("+RX:<len>,<data>,RSSI:<rssi> - Received RF packet (if AT+RF_RX_TO_UART=1)\r\n");
+    AT_SendStringResponse("TX:DONE - RF transmission finished\r\n");
+
     // Add examples for complex commands
     AT_SendStringResponse("\r\nExamples for complex commands:\r\n");
     AT_SendStringResponse("  AT+LR_TX_SET=SF:9,BW:7,CR:45,Freq:869525000,IQInv:0,HeaderMode:0,CRC:1,Preamble:8,Power:22,LDRO:2\r\n");
@@ -397,9 +405,23 @@ static void AT_HandleIdentify(char *params)
 
 
 /**
- * @brief 
- * 
- * @param params 
+ * @brief Vypis schopnosti firmware pro host aplikaci
+ *        HOST_V1 je povinny token - kontroluje ho Python driver
+ *
+ * @param params
+ */
+static void AT_HandleCaps(char *params)
+{
+    UNUSED(params);
+
+    AT_SendStringResponse("+CAPS:HOST_V1,TX_DONE,RX_TO_UART,RX_FORMAT,TX_SAVED,TX_CW,TOA,AUX,AUX_PWM_HW,UART_BAUD\r\n");
+}
+
+
+/**
+ * @brief
+ *
+ * @param params
  */
 static void AT_HandleRestartSys(char *params)
 {

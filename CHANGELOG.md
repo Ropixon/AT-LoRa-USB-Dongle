@@ -3,6 +3,12 @@
 All notable changes to this firmware are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org/) and match the value returned by `AT+IDENTIFY` (`FW_VERSION_MAJOR.MINOR.PATCH` in `Modules/ATInterface/AT_cmd.h`).
 
+## [1.2.0] - 2026-10-06
+### Added
+- `AT+CAPS` command - returns firmware capabilities as one line: `+CAPS:HOST_V1,TX_DONE,...` (`HOST_V1` is required by the Python host driver).
+- `TX:DONE` asynchronous notification after every completed RF transmission.
+- `AT+HELP` now lists asynchronous notifications (`+RX:`, `TX:DONE`).
+
 ## [1.1.0] - 2026-08-06
 ### Changed
 - AUX pin PWM: `aux7` (PA3/TIM21_CH2) and `aux8` (PA2/TIM2_CH3) are now driven by true hardware PWM timers instead of FreeRTOS software timers; the remaining AUX pins keep using software timers.

@@ -140,9 +140,16 @@ Ropixon AT-USB LoRa Dongle, FW: v1.1.0, HW: <freq_band> <osc_type> v1.0, Build: 
 | `AT` | Print help | `AT` |
 | `AT+HELP` | Display all available commands | `AT+HELP` |
 | `AT+IDENTIFY` | Return unique device ID | `AT+IDENTIFY` |
+| `AT+CAPS` | List firmware capabilities | `AT+CAPS` |
 | `AT+FACTORY_RST` | Reset to factory defaults and restart | `AT+FACTORY_RST` |
 | `AT+SYS_RESTART` | System restart | `AT+SYS_RESTART` |
 | `AT+UART_BAUD` | Set/query baud rate (restarts on change) | `AT+UART_BAUD=230400` |
+
+**Capabilities (`AT+CAPS`)** - one line, comma-separated tokens, no spaces, no trailing `OK`:
+```
++CAPS:HOST_V1,TX_DONE,RX_TO_UART,RX_FORMAT,TX_SAVED,TX_CW,TOA,AUX,AUX_PWM_HW,UART_BAUD
+```
+`HOST_V1` is always present and marks support of host protocol v1 (required by the Python host driver). Host applications should search for individual tokens rather than compare the whole line.
 
 ### LoRa TX Parameters
 
@@ -209,6 +216,12 @@ AT+LR_RX_SET=SF:7,BW:7,CR:45,Freq:869525000,IQInv:0,HeaderMode:0,CRC:1,Preamble:
 +RX:<length>,<data>,RSSI:<rssi>
 ```
 Example: `+RX:5,48656C6C6F,RSSI:-45` (5 bytes, data "Hello" in hex, RSSI -45 dBm)
+
+**Transmission finished:**
+```
+TX:DONE
+```
+Sent asynchronously after every completed RF transmission (`AT+RF_TX_HEX`, `AT+RF_TX_TXT`, `AT+RF_TX_SAVED` and each packet of `AT+RF_TX_SAVED_REPEAT`).
 
 ### Saved Packets and Periodic Transmission
 
