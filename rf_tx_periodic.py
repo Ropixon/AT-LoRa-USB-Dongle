@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Periodic RF TX - sends a 29-byte HEX packet every 1 second on COM7.
-Does NOT change any RF settings - uses whatever is stored in the dongle.
+Periodic RF TX - sends a 29-byte HEX packet every 1 second.
+Sets only the TX frequency (TX_FREQ_HZ) at startup; all other RF settings
+are taken from the dongle. Set TX_FREQ_HZ = None to keep the stored frequency.
 Packet content: 4-byte sequence counter (big-endian) + 25 random bytes.
 """
 
@@ -11,10 +12,12 @@ import os
 import struct
 import sys
 
-PORT       = "COM7"
+TX_FREQ_HZ = 915000000          # TX frequency in Hz (150-960 MHz), None = don't change
+
+PORT       = "COM5"
 BAUD_LIST  = [115200, 230400]   # tried in order during auto-detection
 PACKET_LEN = 29                 # bytes
-PERIOD_S   = 10.0                # seconds between packets
+PERIOD_S   = 1.0                # seconds between packets
 TX_TIMEOUT = 3.0                # max seconds to wait for OK after TX command
 
 
@@ -97,6 +100,14 @@ def main():
     except (RuntimeError, serial.SerialException) as e:
         print(f"ERROR: {e}")
         sys.exit(1)
+
+    if TX_FREQ_HZ is not None:
+        ok, response = send_at(ser, f"AT+LR_TX_FREQ={TX_FREQ_HZ}")
+        if not ok:
+            print(f"ERROR: setting TX frequency failed: {response!r}")
+            ser.close()
+            sys.exit(1)
+        print(f"  TX frequency set to {TX_FREQ_HZ} Hz")
 
     print(f"Connected at {baud} baud. Sending {PACKET_LEN}-byte packets every {PERIOD_S}s. Ctrl+C to stop.\n")
 

@@ -363,7 +363,7 @@ static void AT_HandleHelp(char *params)
     // Asynchronni notifikace (nejsou to prikazy)
     AT_SendStringResponse("\r\n--- Async notifications ---\r\n");
     AT_SendStringResponse("+RX:<len>,<data>,RSSI:<rssi> - Received RF packet (if AT+RF_RX_TO_UART=1)\r\n");
-    AT_SendStringResponse("TX:DONE - RF transmission finished\r\n");
+    AT_SendStringResponse("+TX:DONE - RF transmission finished\r\n");
 
     // Add examples for complex commands
     AT_SendStringResponse("\r\nExamples for complex commands:\r\n");

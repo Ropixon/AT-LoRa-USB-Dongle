@@ -219,7 +219,7 @@ Example: `+RX:5,48656C6C6F,RSSI:-45` (5 bytes, data "Hello" in hex, RSSI -45 dBm
 
 **Transmission finished:**
 ```
-TX:DONE
++TX:DONE
 ```
 Sent asynchronously after every completed RF transmission (`AT+RF_TX_HEX`, `AT+RF_TX_TXT`, `AT+RF_TX_SAVED` and each packet of `AT+RF_TX_SAVED_REPEAT`).
 

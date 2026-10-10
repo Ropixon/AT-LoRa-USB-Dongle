@@ -6,8 +6,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/), versions follow
 ## [1.2.0] - 2026-10-06
 ### Added
 - `AT+CAPS` command - returns firmware capabilities as one line: `+CAPS:HOST_V1,TX_DONE,...` (`HOST_V1` is required by the Python host driver).
-- `TX:DONE` asynchronous notification after every completed RF transmission.
-- `AT+HELP` now lists asynchronous notifications (`+RX:`, `TX:DONE`).
+- `+TX:DONE` asynchronous notification after every completed RF transmission.
+- `AT+HELP` now lists asynchronous notifications (`+RX:`, `+TX:DONE`).
+### Fixed
+- Numeric query responses (e.g. `AT+LR_TX_FREQ?`, `AT+LR_TX_SF?`, `AT+RF_TX_NVM_PERIOD?`) are now terminated with `\r\n` like all other responses.
 
 ## [1.1.0] - 2026-08-06
 ### Changed

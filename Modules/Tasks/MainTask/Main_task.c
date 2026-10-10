@@ -244,7 +244,7 @@ void main_task_on(main_ctx_t *ctx, dataQueue_t *rxd)
 
         case CMD_MAIN_RF_TX_DONE:
             // Asynchronni notifikace o dokonceni vysilani
-            AT_SendStringResponse("TX:DONE\r\n");
+            AT_SendStringResponse("+TX:DONE\r\n");
 
             // Kontrola zda je aktivní periodické vysílání (timer ID != NULL)
             if (pvTimerGetTimerID(ctx->timers.Periodic_RF_TX.timer) != NULL)

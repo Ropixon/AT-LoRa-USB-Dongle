@@ -509,12 +509,12 @@ void ProcessRFMultiSetCommand(bool tx, char *params)
  */
 static void AT_FormatUint32Response(uint32_t value, uint8_t *response, uint16_t *response_size)
 {
-    *response_size = snprintf((char *)response, RESPONSE_BUFF_SIZE, "%lu", (unsigned long) value);
+    *response_size = snprintf((char *)response, RESPONSE_BUFF_SIZE, "%lu\r\n", (unsigned long) value);
 }
 
 static void AT_FormatUint16Response(uint16_t value, uint8_t *response, uint16_t *response_size)
 {
-    *response_size = snprintf((char *)response, RESPONSE_BUFF_SIZE, "%u", (unsigned int) value);
+    *response_size = snprintf((char *)response, RESPONSE_BUFF_SIZE, "%u\r\n", (unsigned int) value);
 }
 
 
@@ -527,7 +527,7 @@ static void AT_FormatUint16Response(uint16_t value, uint8_t *response, uint16_t 
  */
 static void AT_FormatUint8Response(uint8_t value, uint8_t *response, uint16_t *response_size)
 {   
-    *response_size = snprintf((char *)response, RESPONSE_BUFF_SIZE, "%u", value);
+    *response_size = snprintf((char *)response, RESPONSE_BUFF_SIZE, "%u\r\n", value);
     //*response_size = sprintf((char *)response, "%u", value);
 }
 

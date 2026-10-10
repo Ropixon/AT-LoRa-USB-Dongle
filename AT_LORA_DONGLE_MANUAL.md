@@ -165,7 +165,7 @@ Kde 5 = pocet prijatých bajtu, 48656C6C6F = samotný paket, -45 = RSSI paketu
 
 **Dokončení vysílání** se oznámí automaticky:
 ```
-TX:DONE
++TX:DONE
 ```
 Vypíše se po každém dokončeném RF vysílání (`AT+RF_TX_HEX`, `AT+RF_TX_TXT`, `AT+RF_TX_SAVED` a každý paket z `AT+RF_TX_SAVED_REPEAT`).
 
