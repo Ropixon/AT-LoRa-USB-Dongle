@@ -8,10 +8,10 @@
 #include "main.h"
 #include "RF_Task.h"
 #include "radio_user.h"
+#include "Main_task.h"
 
 
 extern osMessageQueueId_t queueRadioHandle;
-extern osMessageQueueId_t  queueMainHandle;
 
 void radio_task_off(radio_context_t *ctx,dataQueue_t *rxd);
 void radio_task_on(radio_context_t *ctx,dataQueue_t *rxd);
@@ -30,7 +30,7 @@ static void _RF_HeartBeat_Callback(TimerHandle_t timer)
 	txm.ptr = NULL;
 
 	txm.cmd = CMD_RF_RADIO_HB;	//TODO nepouzvame
-	xQueueSend(queueRadioHandle,&txm,portMAX_DELAY);
+	RT_SendDataToRFTask(&txm, portMAX_DELAY);
 }
 
 static void _RF_EventLed_Callback(TimerHandle_t timer)
@@ -55,7 +55,7 @@ void radio_task_off(radio_context_t *ctx,dataQueue_t *rxd)
 			ru_radio_process_commands(RADIO_CMD_START_RX, ctx, rxd);
 
 			sd.cmd = CMD_CORE_RF_IS_ON;
-			xQueueSend(queueMainHandle,&sd,portMAX_DELAY);
+			MT_SendDataToMainTask(&sd, portMAX_DELAY);
 
 			ctx->rfTaskState.previousState = ctx->rfTaskState.currentState;
 			ctx->rfTaskState.currentState = RF_TASK_ON;
@@ -66,7 +66,7 @@ void radio_task_off(radio_context_t *ctx,dataQueue_t *rxd)
 			ru_radio_process_commands(RADIO_CMD_SLEEP,ctx,rxd);
 
 			sd.cmd = CMD_CORE_RF_IS_OFF;
-			xQueueSend(queueMainHandle,&sd,portMAX_DELAY);
+			MT_SendDataToMainTask(&sd, portMAX_DELAY);
 
 			ctx->rfTaskState.previousState = ctx->rfTaskState.currentState;
 			ctx->rfTaskState.currentState = RF_TASK_OFF;
@@ -93,7 +93,7 @@ void radio_task_on(radio_context_t *ctx, dataQueue_t *rxd)
 			ru_radio_process_commands(RADIO_CMD_START_RX, ctx, rxd);
 
 			sd.cmd = CMD_CORE_RF_IS_ON;
-			xQueueSend(queueMainHandle,&sd,portMAX_DELAY);
+			MT_SendDataToMainTask(&sd, portMAX_DELAY);
 
 			ctx->rfTaskState.previousState = ctx->rfTaskState.currentState;
 			ctx->rfTaskState.currentState = RF_TASK_ON;
@@ -103,7 +103,7 @@ void radio_task_on(radio_context_t *ctx, dataQueue_t *rxd)
 			ru_radio_process_commands(RADIO_CMD_SLEEP,ctx,rxd);
 
 			sd.cmd = CMD_CORE_RF_IS_OFF;
-			xQueueSend(queueMainHandle,&sd,portMAX_DELAY);
+			MT_SendDataToMainTask(&sd, portMAX_DELAY);
 
 			ctx->rfTaskState.previousState = ctx->rfTaskState.currentState;
 			ctx->rfTaskState.currentState = RF_TASK_OFF;
@@ -138,7 +138,7 @@ void radio_task_on(radio_context_t *ctx, dataQueue_t *rxd)
 		case CMD_RF_HB_REQUEST:
 			// Respond to heartbeat request from main task
 			sd.cmd = CMD_MAIN_HB_RESPONSE_RF;
-			xQueueSend(queueMainHandle, &sd, 0);  // Non-blocking
+			MT_SendDataToMainTask(&sd, 0);  // Non-blocking
 			break;
 
 		case CMD_RF_TX_CW:
@@ -162,8 +162,30 @@ void radio_task_on(radio_context_t *ctx, dataQueue_t *rxd)
 
 
 /**
- * @brief 
- * 
+ * @brief Posle zpravu do fronty RF tasku. Lze volat z tasku i z ISR.
+ *
+ * @param data    zprava (kopiruje se do fronty)
+ * @param timeout max. doba cekani na misto ve fronte (v ISR se ignoruje, nikdy neblokuje)
+ * @return true   zprava zarazena do fronty
+ * @return false  fronta plna - pokud data->ptr nese alokovanou pamet, musi ji uvolnit volajici
+ */
+bool RT_SendDataToRFTask(dataQueue_t *data, TickType_t timeout)
+{
+	if (__get_IPSR())
+	{
+		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+		BaseType_t result = xQueueSendFromISR(queueRadioHandle, data, &xHigherPriorityTaskWoken);
+		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+		return (result == pdTRUE);
+	}
+
+	return (xQueueSend(queueRadioHandle, data, timeout) == pdTRUE);
+}
+
+
+/**
+ * @brief
+ *
  */
 void radio_task(void)
 {	

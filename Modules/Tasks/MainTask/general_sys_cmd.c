@@ -52,7 +52,6 @@ const AT_CommandLimit_t AT_CommandLimits[] = {
 
 
 
-extern osMessageQueueId_t queueRadioHandle;
 
 // Timer pro debouncing RX rekonfigurace
 static TimerHandle_t rxReconfigTimer = NULL;
@@ -248,7 +247,7 @@ static void RxReconfigTimerCallback(TimerHandle_t xTimer)
     dataQueue_t txm;
     txm.ptr = NULL;
     txm.cmd = CMD_RF_RADIO_RECONFIG_RX;
-    xQueueSend(queueRadioHandle, &txm, portMAX_DELAY);
+    RT_SendDataToRFTask(&txm, portMAX_DELAY);
 }
 
 
@@ -1550,7 +1549,7 @@ bool GSC_ProcessCommand(eATCommands cmd, uint8_t *data, uint16_t size)
                     queueData.data = value;
                     queueData.ptr = NULL;
 
-                    if (xQueueSend(queueRadioHandle, &queueData, pdMS_TO_TICKS(100)) != pdPASS)
+                    if (!RT_SendDataToRFTask(&queueData, pdMS_TO_TICKS(100)))
                     {
                         AT_SendStringResponse("ERROR: Failed to send CW command to RF task\r\n");
                         commandHandled = false;
@@ -1876,7 +1875,7 @@ static void _GSC_Handle_TX(uint8_t *data, uint8_t size)
     txm.ptr = tx_pkt;
     txm.cmd = CMD_RF_SEND_DATA_NOW;
 
-    xQueueSend(queueRadioHandle,&txm,portMAX_DELAY);
+    RT_SendDataToRFTask(&txm, portMAX_DELAY);
 }
 
 /**
@@ -1906,7 +1905,7 @@ static bool _GSC_Handle_RX_TO_UART(uint8_t *data, uint8_t size)
         return false;
     }
 
-    xQueueSend(queueRadioHandle,&txm,portMAX_DELAY);
+    RT_SendDataToRFTask(&txm, portMAX_DELAY);
     return true;
 }
 

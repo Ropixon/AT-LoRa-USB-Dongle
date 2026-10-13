@@ -128,6 +128,7 @@ typedef struct
 } radio_context_t;
 
 void radio_task(void);
+bool RT_SendDataToRFTask(dataQueue_t *data, TickType_t timeout);
 
 
 

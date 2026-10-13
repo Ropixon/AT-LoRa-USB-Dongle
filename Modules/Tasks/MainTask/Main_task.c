@@ -25,7 +25,6 @@ StaticSemaphore_t xSemaphoreBuffer_USART;
 SemaphoreHandle_t xBinarySemaphore_USART;
 
 extern UART_HandleTypeDef huart1;
-extern osMessageQId queueRadioHandle;
 extern osMessageQId queueMainHandle;
 
 void main_task_off(main_ctx_t *ctx,dataQueue_t *rxd);
@@ -43,9 +42,6 @@ static uint8_t rxBuffer_USART[MAX_UART_RX_BUFFER];
 static uint8_t txBuffer_USART[MAX_UART_RX_BUFFER];
 
 static uint8_t rxShadowBuffer_USART[MAX_UART_RX_BUFFER];
-
-static SemaphoreHandle_t _Main_QueueSemaphore;
-static StaticSemaphore_t _Main_QueueSemaphoreBuffer;
 
 
 /**
@@ -89,11 +85,11 @@ static void GeneralSys_IWDG_Callback(TimerHandle_t xTimer)
     
     // Send heartbeat request to RF task
     txm.cmd = CMD_RF_HB_REQUEST;
-    xQueueSend(queueRadioHandle, &txm, 0);  // Non-blocking
-    
+    RT_SendDataToRFTask(&txm, 0);       // Non-blocking
+
     // Notify main task to start collecting responses
     txm.cmd = CMD_MAIN_IWDG_REFRESH;
-    xQueueSend(queueMainHandle, &txm, 0);   // Non-blocking
+    MT_SendDataToMainTask(&txm, 0);     // Non-blocking
 }
 
 /**
@@ -118,7 +114,14 @@ bool AT_CustomCommandHandler(char *data,eATCommands atCmd, uint16_t size)
 		txm.cmd = CMD_MAIN_AT_RX_PACKET;
 		txm.tmp_8 = (uint8_t) atCmd;
 		txm.tmp_16 = size;
-		MT_SendDataToMainTask(&txm);
+
+		if (!MT_SendDataToMainTask(&txm, 0))
+		{
+			// Fronta plna - main task zpravu nedostane a semafor by nikdy neuvolnil
+			xSemaphoreGiveFromISR(xBinarySemaphore_USART, &xHigherPriorityTaskWoken);
+			portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+			return false;
+		}
 
 		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 	}
@@ -302,57 +305,26 @@ void main_task_on(main_ctx_t *ctx, dataQueue_t *rxd)
 }
 
 /**
- * @brief 
- * 
- * @param data 
- * @return true 
- * @return false 
+ * @brief Posle zpravu do fronty main tasku. Lze volat z tasku i z ISR.
+ *
+ * FreeRTOS fronty jsou thread/ISR-safe, zadny dalsi zamek neni potreba.
+ *
+ * @param data    zprava (kopiruje se do fronty)
+ * @param timeout max. doba cekani na misto ve fronte (v ISR se ignoruje, nikdy neblokuje)
+ * @return true   zprava zarazena do fronty
+ * @return false  fronta plna - pokud data->ptr nese alokovanou pamet, musi ji uvolnit volajici
  */
-bool MT_SendDataToMainTask(dataQueue_t *data)
+bool MT_SendDataToMainTask(dataQueue_t *data, TickType_t timeout)
 {
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    BaseType_t result;
-
-    // Zkontrolujeme, zda je voláno z ISR
     if (__get_IPSR())
     {
-        // Pokud jsme v ISR, pokusíme se získat semafor bez blokování
-        if (xSemaphoreTakeFromISR(_Main_QueueSemaphore, &xHigherPriorityTaskWoken) == pdTRUE)
-        {
-            // Semafor je volný, můžeme poslat data do fronty
-            result = xQueueSendFromISR(queueMainHandle, data, &xHigherPriorityTaskWoken);
-
-            // Uvolníme semafor pro další přístup
-            xSemaphoreGiveFromISR(_Main_QueueSemaphore, &xHigherPriorityTaskWoken);
-
-            // Přepneme kontext, pokud je to nutné
-            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-        }
-        else
-        {
-            // Semafor nebyl volný - fronta je momentálně obsazena
-            return false;
-        }
-    }
-    else
-    {
-        // Mimo ISR - čekáme na získání semaforu
-        if (xSemaphoreTake(_Main_QueueSemaphore, portMAX_DELAY) == pdTRUE)
-        {
-            // Semafor je získán, posíláme data do fronty
-            result = xQueueSend(queueMainHandle, data, portMAX_DELAY);
-
-            // Uvolníme semafor
-            xSemaphoreGive(_Main_QueueSemaphore);
-        }
-        else
-        {
-            // Semafor nebyl získán, vracíme chybu
-            return false;
-        }
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        BaseType_t result = xQueueSendFromISR(queueMainHandle, data, &xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+        return (result == pdTRUE);
     }
 
-    return (result == pdTRUE);
+    return (xQueueSend(queueMainHandle, data, timeout) == pdTRUE);
 }
 
 
@@ -371,8 +343,6 @@ void main_task(void)
 
 	// Initialize all LEDs (turn off)
 	HW_LED_INIT();
-
-	_Main_QueueSemaphore = xSemaphoreCreateMutexStatic(&_Main_QueueSemaphoreBuffer);
 
     ctx.timers.LED_alive.timer = xTimerCreateStatic("LED alive timer", pdMS_TO_TICKS(100), pdFALSE, NULL, 
                                                          _Main_Alive_Callback,  &ctx.timers.LED_alive.timerPlace);
@@ -423,7 +393,7 @@ void main_task(void)
     
     txm.cmd = CMD_RF_RADIO_RX_TO_UART;
     txm.data = rxUart;
-    xQueueSend(queueRadioHandle,&txm,portMAX_DELAY);
+    RT_SendDataToRFTask(&txm, portMAX_DELAY);
 
     /* create timer for iwdg (one-shot, will be restarted after successful HB collection) */
     ctx.timers.IWDG_timer.timer = xTimerCreateStatic("IWDG timer", pdMS_TO_TICKS(1000), pdFALSE, NULL, 

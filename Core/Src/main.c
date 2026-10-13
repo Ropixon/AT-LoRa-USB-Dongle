@@ -30,8 +30,7 @@
 #include "AT_cmd.h"
 #include "cmsis_os2.h"
 #include "hw_config.h"
-
-extern osMessageQueueId_t queueRadioHandle;
+#include "RF_Task.h"
 
 #define LOG_TAG "[MAIN]"
 #define LOG_LEVEL LOG_LEVEL_VERBOSE
@@ -98,20 +97,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 { 
   dataQueue_t txm;
 	txm.ptr = NULL;
-  BaseType_t xHigherPriorityTaskWoken;
-
 
   if(GPIO_Pin == SX1262_DIO1_Pin)
   {
       txm.cmd = CMD_RF_IRQ_FIRED;
-
-      xQueueSendFromISR(queueRadioHandle,&txm,&xHigherPriorityTaskWoken );
-  }
-
-  if( xHigherPriorityTaskWoken )
-  {
-      /* Actual macro used here is port specific. */
-      portYIELD_FROM_ISR (xHigherPriorityTaskWoken);
+      RT_SendDataToRFTask(&txm, 0);
   }
 }
 

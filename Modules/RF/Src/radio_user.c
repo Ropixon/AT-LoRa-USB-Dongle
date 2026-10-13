@@ -16,9 +16,9 @@
 #include "ral_defs.h"
 #include "sx126x.h"
 #include "NVMA.h"
+#include "Main_task.h"
 
 
-extern osMessageQId queueMainHandle;
 
 #define LOG_TAG "[RADIO-USER]"
 #define LOG_LEVEL LOG_LEVEL_NONE
@@ -708,7 +708,7 @@ void ru_radio_process_IRQ(radio_context_t *ctx)
 						txm.cmd = CMD_MAIN_RF_RX_PACKET;
 						txm.ptr = rx_pkt;
 
-						xQueueSend(queueMainHandle,&txm,portMAX_DELAY);
+						MT_SendDataToMainTask(&txm, portMAX_DELAY);
 
 						HW_LED_RF_EVENT_ON();
 						osTimerStart(ctx->timers.rfEventLedTimer.timer,pdMS_TO_TICKS(RF_EVENT_LED_TIMEOUT_MS));
@@ -735,7 +735,7 @@ void ru_radio_process_IRQ(radio_context_t *ctx)
 
 			txm.cmd = CMD_MAIN_RF_TX_DONE;
 			txm.ptr = NULL;
-			xQueueSend(queueMainHandle,&txm,portMAX_DELAY);
+			MT_SendDataToMainTask(&txm, portMAX_DELAY);
 			break;
 
 		case RF_MODE_CAD:

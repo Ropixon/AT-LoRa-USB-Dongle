@@ -55,7 +55,7 @@ typedef struct
 
 void main_task(void);
 void irq_RELE_falling(void);
-bool MT_SendDataToMainTask(dataQueue_t *data);
+bool MT_SendDataToMainTask(dataQueue_t *data, TickType_t timeout);
 bool AT_CustomCommandHandler(char *data,eATCommands atCmd, uint16_t size);
 
 #endif /* INC_MAIN_TASK_H_ */
