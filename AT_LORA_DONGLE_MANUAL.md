@@ -85,7 +85,7 @@ Dongle odpoví "Ropixon AT-USB LoRa Dongle, FW: v1.1.0, HW: <freq_band> <osc_typ
 
 **Schopnosti firmware (`AT+CAPS`)** - jeden řádek, tokeny oddělené čárkou, bez mezer, bez `OK` na konci:
 ```
-+CAPS:HOST_V1,TX_DONE,RX_TO_UART,RX_FORMAT,TX_SAVED,TX_CW,TOA,AUX,AUX_PWM_HW,UART_BAUD
++CAPS:HOST_V1,TX_DONE,RX_TO_UART,RX_FORMAT,RX_SNR,RADIO_ERR,TX_SAVED,TX_CW,TOA,AUX,AUX_PWM_HW,UART_BAUD
 ```
 `HOST_V1` je vždy přítomen a označuje podporu host protokolu v1 (vyžaduje ho Python driver). Host aplikace má hledat jednotlivé tokeny, ne porovnávat celý řádek.
 
@@ -159,15 +159,21 @@ AT+LR_RX_SET=SF:7,BW:7,CR:45,Freq:869525000,IQInv:0,HeaderMode:0,CRC:1,Preamble:
 **Přijatá data se zobrazí automaticky** (pokud je povoleno RX_TO_UART=1 (ON), =0 (OFF), ?):
 Formát výpisu přijatých dat
 ```
-+RX:5,48656C6C6F,RSSI:-45
++RX:5,48656C6C6F,RSSI:-45,SNR:9
 ```
-Kde 5 = pocet prijatých bajtu, 48656C6C6F = samotný paket, -45 = RSSI paketu
+Kde 5 = počet přijatých bajtů, 48656C6C6F = samotný paket, -45 = RSSI paketu [dBm], 9 = SNR paketu [dB]
 
 **Dokončení vysílání** se oznámí automaticky:
 ```
 +TX:DONE
 ```
 Vypíše se po každém dokončeném RF vysílání (`AT+RF_TX_HEX`, `AT+RF_TX_TXT`, `AT+RF_TX_SAVED` a každý paket z `AT+RF_TX_SAVED_REPEAT`).
+
+**Chyba rádia** se oznámí automaticky:
+```
++RADIO:ERROR
+```
+Vypíše se, pokud se při startu nepodaří inicializovat LoRa rádio (SX1262), nebo pokud je požadováno vysílání (`AT+RF_TX_*`, `AT+RF_TX_CW`) a rádio nefunguje. Dongle se v tomto případě nerestartuje - AT příkazy fungují dál, ale `+TX:DONE` ani `+RX:` nepřijdou. Zkontrolujte HW a zkuste `AT+SYS_RESTART`.
 
 ### Uložené pakety a periodické vysílání
 Do AT dongelu je možné uložit jeden paket (NVMA pamět), ten je pak možné kdykoliv odeslat, nebo nastavit periodické odesílání
@@ -212,7 +218,7 @@ AT+RF_TX_HEX=AABBCCDD
 ```
 AT+LR_RX_SET=SF:9,BW:7,CR:45,Freq:869525000,IQInv:0,HeaderMode:0,CRC:1,Preamble:8,LDRO:2
 ```
-→ Přijímač vypíše: `+RX:4,AABBCCDD,RSSI:-47
+→ Přijímač vypíše: `+RX:4,AABBCCDD,RSSI:-47,SNR:8
 
 ### Příklad 2: Range test s periodickým vysíláním
 
@@ -231,7 +237,7 @@ AT+RF_RX_TO_UART=1
 AT+RF_RX_FORMAT=ASCII
 ```
 Následný příjem na RX:
-+RF:5,1122334455,RSSI:-68
++RF:5,1122334455,RSSI:-68,SNR:5
 
 ### Příklad 3: CW test na frekvenci
 

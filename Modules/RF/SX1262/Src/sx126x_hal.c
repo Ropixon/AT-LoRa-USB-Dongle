@@ -28,6 +28,8 @@
 /************************************************************************/
 /* Local #DEFINE														*/
 /************************************************************************/
+#define SX126X_BUSY_TIMEOUT_MS		100		// max. doba cekani na BUSY - kdyz radio nereaguje, nezasekneme se
+#define SX126X_BUSY_SPIN_MS			1		// do teto doby cekame aktivne, pak osDelay(1)
 
 /************************************************************************/
 /* Local TYPEDEF												   		*/
@@ -47,7 +49,7 @@ static volatile radio_mode_t radio_mode = RADIO_SLEEP;
 /* Declaration functions											   	*/
 /************************************************************************/
 void SX126xWaitOnBusy(GPIO_TypeDef *GPIOx, uint16_t pin);
-void sx126xCheckDeviceReady(const void* context );
+sx126x_hal_status_t sx126xCheckDeviceReady(const void* context );
 
 /************************************************************************/
 /* Definition functions                                                 */
@@ -75,7 +77,7 @@ sx126x_hal_status_t sx126x_hal_write(const void *context, const uint8_t *command
 	spiDev = (radio_hal_cfg_t*) context;
 
 
-	sx126xCheckDeviceReady( context);
+	if(sx126xCheckDeviceReady(context) != SX126X_HAL_STATUS_OK)	return SX126X_HAL_STATUS_ERROR;
 #if(FRAM_RF_SPI_WITH_DMA == 1)
 
 	if(SPI_RFFRAMGetLine(SPI_RFFRAM_Select_RF)==false)	_exit(785186);
@@ -111,7 +113,7 @@ sx126x_hal_status_t sx126x_hal_write(const void *context, const uint8_t *command
 	// 0x84 - SX126x_SET_SLEEP opcode. In sleep mode the radio dio is struck to 1 => do not test it
 	if( command[0] != 0x84 )
 	{
-		sx126xCheckDeviceReady(context );
+		if(sx126xCheckDeviceReady(context) != SX126X_HAL_STATUS_OK)	return SX126X_HAL_STATUS_ERROR;
 	}
 	else
 	{
@@ -137,7 +139,7 @@ sx126x_hal_status_t sx126x_hal_write(const void *context, const uint8_t *command
 sx126x_hal_status_t sx126x_hal_read(const void *context, const uint8_t *command, const uint16_t command_length, uint8_t *data,
 		const uint16_t data_length)
 {
-	sx126xCheckDeviceReady(context);
+	if(sx126xCheckDeviceReady(context) != SX126X_HAL_STATUS_OK)	return SX126X_HAL_STATUS_ERROR;
 
 #if(FRAM_RF_SPI_WITH_DMA == 1)
 	
@@ -204,7 +206,7 @@ sx126x_hal_status_t sx126x_hal_reset(const void *context)
 	HAL_GPIO_WritePin(spiDev->pin_RESET.port, spiDev->pin_RESET.pin, GPIO_PIN_SET);
 	osDelay(5);
 
-	sx126xCheckDeviceReady( context);
+	if(sx126xCheckDeviceReady(context) != SX126X_HAL_STATUS_OK)	return SX126X_HAL_STATUS_ERROR;
 
 	radio_mode = RADIO_AWAKE;
 	return SX126X_HAL_STATUS_OK;
@@ -229,42 +231,55 @@ sx126x_hal_status_t sx126x_hal_wakeup( const void* context )
 //		sx126x_hal_read( context, buf, 1, &status_local, 1 );
 //		return SX126X_HAL_STATUS_OK;
 
-	sx126xCheckDeviceReady(context);
-	return SX126X_HAL_STATUS_OK;
+	return sx126xCheckDeviceReady(context);
 }
 
 
 /*
  *
  */
-static void sx126x_hal_wait_on_busy(const void* context)
+static sx126x_hal_status_t sx126x_hal_wait_on_busy(const void* context)
 {
 	radio_hal_cfg_t* spiDev;
 	spiDev = (radio_hal_cfg_t*) context;
+	uint32_t start = HAL_GetTick();
 
-    while( HAL_GPIO_ReadPin(spiDev->pin_BUSY.port, spiDev->pin_BUSY.pin)==GPIO_PIN_SET );
+    while( HAL_GPIO_ReadPin(spiDev->pin_BUSY.port, spiDev->pin_BUSY.pin)==GPIO_PIN_SET )
+    {
+    	uint32_t elapsed = HAL_GetTick() - start;
 
+    	if(elapsed > SX126X_BUSY_TIMEOUT_MS)	return SX126X_HAL_STATUS_ERROR;
+
+    	// BUSY bezne spadne za par us - aktivne cekame. Trva-li dele (kalibrace, porucha),
+    	// uvolnime CPU ostatnim taskum. Nesmi se volat uvnitr vTaskSuspendAll()!
+    	if(elapsed >= SX126X_BUSY_SPIN_MS)	osDelay(1);
+    }
+
+    return SX126X_HAL_STATUS_OK;
 }
 
 
 /*
  *
  */
-void sx126xCheckDeviceReady(const void* context )
+sx126x_hal_status_t sx126xCheckDeviceReady(const void* context )
 {
 	radio_hal_cfg_t* spiDev;
 	spiDev = (radio_hal_cfg_t*) context;
+	sx126x_hal_status_t status;
 
 	if( radio_mode != RADIO_SLEEP )
 	{
-		sx126x_hal_wait_on_busy(context);
+		status = sx126x_hal_wait_on_busy(context);
 	}
 	else
 	{
 		// Busy is HIGH in sleep mode, wake-up the device
 		HAL_GPIO_WritePin(spiDev->pin_NSS.port, spiDev->pin_NSS.pin, GPIO_PIN_RESET);
-		sx126x_hal_wait_on_busy(context);
+		status = sx126x_hal_wait_on_busy(context);
 		HAL_GPIO_WritePin(spiDev->pin_NSS.port, spiDev->pin_NSS.pin, GPIO_PIN_SET);
-		radio_mode = RADIO_AWAKE;
+		if(status == SX126X_HAL_STATUS_OK)	radio_mode = RADIO_AWAKE;
 	}
+
+	return status;
 }

@@ -124,6 +124,7 @@ typedef struct
 	radio_states_t		rfTaskState;
 	RFTimers_t			timers;
 	bool				rx_to_uart;		//true, false
+	bool				radio_ok;		//false = init SX1262 selhal, na radio nesahame
 
 } radio_context_t;
 

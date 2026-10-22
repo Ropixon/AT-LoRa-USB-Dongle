@@ -22,7 +22,8 @@ typedef struct
 {
 	uint8_t 	*packet;
 	uint8_t		size;
-	uint16_t	rx_rssi;
+	int16_t		rx_rssi;
+	int8_t		rx_snr;
 	uint8_t		rad;		//zatim nepotrebujem urcuje ktere radio patri k paketu
 }packet_info_t;
 

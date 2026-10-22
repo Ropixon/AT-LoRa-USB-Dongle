@@ -142,7 +142,7 @@ Ropixon AT-USB LoRa Dongle, FW: v1.1.0, HW: <freq_band> <osc_type> v1.0, Build: 
 
 **Capabilities (`AT+CAPS`)** - one line, comma-separated tokens, no spaces, no trailing `OK`:
 ```
-+CAPS:HOST_V1,TX_DONE,RX_TO_UART,RX_FORMAT,TX_SAVED,TX_CW,TOA,AUX,AUX_PWM_HW,UART_BAUD
++CAPS:HOST_V1,TX_DONE,RX_TO_UART,RX_FORMAT,RX_SNR,RADIO_ERR,TX_SAVED,TX_CW,TOA,AUX,AUX_PWM_HW,UART_BAUD
 ```
 `HOST_V1` is always present and marks support of host protocol v1 (required by the Python host driver). Host applications should search for individual tokens rather than compare the whole line.
 
@@ -208,15 +208,21 @@ AT+LR_RX_SET=SF:7,BW:7,CR:45,Freq:869525000,IQInv:0,HeaderMode:0,CRC:1,Preamble:
 
 **Received data format:**
 ```
-+RX:<length>,<data>,RSSI:<rssi>
++RX:<length>,<data>,RSSI:<rssi>,SNR:<snr>
 ```
-Example: `+RX:5,48656C6C6F,RSSI:-45` (5 bytes, data "Hello" in hex, RSSI -45 dBm)
+Example: `+RX:5,48656C6C6F,RSSI:-45,SNR:9` (5 bytes, data "Hello" in hex, RSSI -45 dBm, SNR 9 dB)
 
 **Transmission finished:**
 ```
 +TX:DONE
 ```
 Sent asynchronously after every completed RF transmission (`AT+RF_TX_HEX`, `AT+RF_TX_TXT`, `AT+RF_TX_SAVED` and each packet of `AT+RF_TX_SAVED_REPEAT`).
+
+**Radio error:**
+```
++RADIO:ERROR
+```
+Sent when the LoRa radio (SX1262) could not be initialized at startup, or when a transmission (`AT+RF_TX_*`, `AT+RF_TX_CW`) is requested while the radio is not working. The dongle does not restart in this case - AT commands keep working, but no `+TX:DONE` / `+RX:` will follow. Check the hardware and use `AT+SYS_RESTART` to try again.
 
 ### Saved Packets and Periodic Transmission
 
@@ -263,7 +269,7 @@ AT+RF_TX_HEX=AABBCCDD
 AT+LR_RX_SET=SF:9,BW:7,CR:45,Freq:869525000,IQInv:0,HeaderMode:0,CRC:1,Preamble:8,LDRO:2
 ```
 
-Receiver output: `+RX:4,AABBCCDD,RSSI:-47`
+Receiver output: `+RX:4,AABBCCDD,RSSI:-47,SNR:8`
 
 ### Example 2: Range Test with Periodic TX
 
@@ -282,7 +288,7 @@ AT+RF_RX_TO_UART=1
 AT+RF_RX_FORMAT=ASCII
 ```
 
-Output: `+RX:10,1122334455,RSSI:-68`
+Output: `+RX:10,1122334455,RSSI:-68,SNR:5`
 
 ### Example 3: CW Test
 

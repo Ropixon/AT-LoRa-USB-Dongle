@@ -362,8 +362,9 @@ static void AT_HandleHelp(char *params)
 
     // Asynchronni notifikace (nejsou to prikazy)
     AT_SendStringResponse("\r\n--- Async notifications ---\r\n");
-    AT_SendStringResponse("+RX:<len>,<data>,RSSI:<rssi> - Received RF packet (if AT+RF_RX_TO_UART=1)\r\n");
+    AT_SendStringResponse("+RX:<len>,<data>,RSSI:<rssi>,SNR:<snr> - Received RF packet (if AT+RF_RX_TO_UART=1)\r\n");
     AT_SendStringResponse("+TX:DONE - RF transmission finished\r\n");
+    AT_SendStringResponse("+RADIO:ERROR - Radio not initialized / not responding\r\n");
 
     // Add examples for complex commands
     AT_SendStringResponse("\r\nExamples for complex commands:\r\n");
@@ -414,7 +415,7 @@ static void AT_HandleCaps(char *params)
 {
     UNUSED(params);
 
-    AT_SendStringResponse("+CAPS:HOST_V1,TX_DONE,RX_TO_UART,RX_FORMAT,TX_SAVED,TX_CW,TOA,AUX,AUX_PWM_HW,UART_BAUD\r\n");
+    AT_SendStringResponse("+CAPS:HOST_V1,TX_DONE,RX_TO_UART,RX_FORMAT,RX_SNR,RADIO_ERR,TX_SAVED,TX_CW,TOA,AUX,AUX_PWM_HW,UART_BAUD\r\n");
 }
 
 

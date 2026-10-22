@@ -660,6 +660,7 @@ void ru_radio_process_IRQ(radio_context_t *ctx)
 	uint16_t		rxSize;
 	ral_irq_t		irqSet;
 	int16_t			RSSI;
+	int8_t			SNR;
 	dataQueue_t		txm;	//tx message
 	packet_info_t	*rx_pkt;
 	uint8_t			*rx_raw_data;
@@ -682,13 +683,14 @@ void ru_radio_process_IRQ(radio_context_t *ctx)
 					if (ral_get_lora_rx_pkt_status(ral, &pktStatus) == RAL_STATUS_OK)
 					{
 						RSSI = pktStatus.rssi_pkt_in_dbm;
+						SNR = (int8_t)pktStatus.snr_pkt_in_db;
 					}
 					else
 					{
 						_exit(3515321352);
 					}
 					
-					LOG_INFO("RX: %d B, RSSI: %d dBm", rxSize, (int16_t)RSSI);
+					LOG_INFO("RX: %d B, RSSI: %d dBm, SNR: %d dB", rxSize, (int16_t)RSSI, (int16_t)SNR);
 
 					if(ctx->rx_to_uart == true && rxSize > 0)
 					{
@@ -704,6 +706,7 @@ void ru_radio_process_IRQ(radio_context_t *ctx)
 						rx_pkt->packet = rx_raw_data;
 						rx_pkt->size = rxSize;
 						rx_pkt->rx_rssi = RSSI;
+						rx_pkt->rx_snr = SNR;
 
 						txm.cmd = CMD_MAIN_RF_RX_PACKET;
 						txm.ptr = rx_pkt;

@@ -3,6 +3,14 @@
 All notable changes to this firmware are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org/) and match the value returned by `AT+IDENTIFY` (`FW_VERSION_MAJOR.MINOR.PATCH` in `Modules/ATInterface/AT_cmd.h`).
 
+## [1.3.0] - 2026-10-22
+### Added
+- `+RX:` notification now includes packet SNR: `+RX:<len>,<data>,RSSI:<rssi>,SNR:<snr>` (SNR in dB). New `AT+CAPS` token `RX_SNR`.
+- `+RADIO:ERROR` asynchronous notification - LoRa radio failed to initialize, or TX was requested while the radio is not working. New `AT+CAPS` token `RADIO_ERR`.
+### Changed
+- Radio init failure no longer resets the dongle - it is reported as `+RADIO:ERROR`, the AT interface keeps running.
+- SX1262 BUSY pin wait now has a 100 ms timeout, so an unresponsive radio can no longer hang the RF task.
+
 ## [1.2.0] - 2026-10-06
 ### Added
 - `AT+CAPS` command - returns firmware capabilities as one line: `+CAPS:HOST_V1,TX_DONE,...` (`HOST_V1` is required by the Python host driver).

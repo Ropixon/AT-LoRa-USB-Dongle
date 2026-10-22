@@ -33,6 +33,37 @@ static void _RF_HeartBeat_Callback(TimerHandle_t timer)
 	RT_SendDataToRFTask(&txm, portMAX_DELAY);
 }
 
+/**
+ * @brief Nahlasi uzivateli, ze radio je mimo provoz (+RADIO:ERROR).
+ *        Pri TX je to dulezite - host jinak ceka na +TX:DONE, ktere nikdy neprijde.
+ */
+static void _RF_ReportRadioError(void)
+{
+	dataQueue_t sd;
+	sd.ptr = NULL;
+	sd.cmd = CMD_MAIN_RF_RADIO_ERROR;
+	MT_SendDataToMainTask(&sd, portMAX_DELAY);
+}
+
+/**
+ * @brief Inicializace radia. Pri selhani neresetujeme dongle - jen nahlasime chybu uzivateli
+ *        a dal na radio nesahame, dokud se init nepovede (AT prikazy i watchdog bezi dal).
+ *
+ * @param ctx
+ * @return true radio OK
+ */
+static bool _RF_InitRadio(radio_context_t *ctx)
+{
+	ctx->radio_ok = ru_radioInit(ctx);
+
+	if (ctx->radio_ok == false)
+	{
+		_RF_ReportRadioError();
+	}
+
+	return ctx->radio_ok;
+}
+
 static void _RF_EventLed_Callback(TimerHandle_t timer)
 {
 	UNUSED(timer);
@@ -51,8 +82,10 @@ void radio_task_off(radio_context_t *ctx,dataQueue_t *rxd)
 	{
 		case CMD_RF_TURN_ON:
 
-			ru_radio_process_commands(RADIO_CMD_INIT,ctx,rxd);
-			ru_radio_process_commands(RADIO_CMD_START_RX, ctx, rxd);
+			if (_RF_InitRadio(ctx))
+			{
+				ru_radio_process_commands(RADIO_CMD_START_RX, ctx, rxd);
+			}
 
 			sd.cmd = CMD_CORE_RF_IS_ON;
 			MT_SendDataToMainTask(&sd, portMAX_DELAY);
@@ -86,11 +119,44 @@ void radio_task_on(radio_context_t *ctx, dataQueue_t *rxd)
 	dataQueue_t	sd;
 	sd.ptr = NULL;
 
+	// Radio neinicializovano - na SX1262 nesahame, jen odpovidame na heartbeat a hlasime chybu
+	if (ctx->radio_ok == false)
+	{
+		switch (rxd->cmd)
+		{
+			case CMD_RF_TURN_ON:
+				break;	// zkusime init znovu (nize)
+
+			case CMD_RF_HB_REQUEST:
+				sd.cmd = CMD_MAIN_HB_RESPONSE_RF;
+				MT_SendDataToMainTask(&sd, 0);  // Non-blocking
+				return;
+
+			case CMD_RF_SEND_DATA_NOW:
+				vPortFree(((packet_info_t*)rxd->ptr)->packet);
+				_RF_ReportRadioError();
+				return;
+
+			case CMD_RF_TX_CW:
+				_RF_ReportRadioError();
+				return;
+
+			case CMD_RF_RADIO_RX_TO_UART:
+				ctx->rx_to_uart = (rxd->data == 1);
+				return;
+
+			default:
+				return;
+		}
+	}
+
 	switch (rxd->cmd)
 	{
 		case CMD_RF_TURN_ON:
-			ru_radio_process_commands(RADIO_CMD_INIT,ctx,rxd);
-			ru_radio_process_commands(RADIO_CMD_START_RX, ctx, rxd);
+			if (_RF_InitRadio(ctx))
+			{
+				ru_radio_process_commands(RADIO_CMD_START_RX, ctx, rxd);
+			}
 
 			sd.cmd = CMD_CORE_RF_IS_ON;
 			MT_SendDataToMainTask(&sd, portMAX_DELAY);
@@ -202,8 +268,11 @@ void radio_task(void)
 
 	ru_sx1262_assign(&ctx);
 
-	if(ru_radioInit(&ctx) == false)	_exit(48351);
-	ru_radio_start_rx(&ctx);
+	ctx.rx_to_uart = true;
+	if (_RF_InitRadio(&ctx))
+	{
+		ru_radio_start_rx(&ctx);
+	}
 
 	for(;;)
 	{

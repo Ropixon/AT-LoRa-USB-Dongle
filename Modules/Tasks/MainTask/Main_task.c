@@ -134,7 +134,7 @@ bool AT_CustomCommandHandler(char *data,eATCommands atCmd, uint16_t size)
 }
 
 
-void AT_SendRfPacketResponse(uint8_t *packet, int16_t rssi, uint16_t length)
+void AT_SendRfPacketResponse(uint8_t *packet, int16_t rssi, int8_t snr, uint16_t length)
 {
     uint8_t response[600]={0}; 
     uint8_t rxFormat;
@@ -184,8 +184,8 @@ void AT_SendRfPacketResponse(uint8_t *packet, int16_t rssi, uint16_t length)
         }
     }
 
-    // Přidání RSSI na konec
-    ret = snprintf((char *)&response[response_size], sizeof(response) - response_size, ",RSSI:%d", rssi);
+    // Přidání RSSI a SNR na konec
+    ret = snprintf((char *)&response[response_size], sizeof(response) - response_size, ",RSSI:%d,SNR:%d", rssi, snr);
     if (ret < 0 || ret >= (int)(sizeof(response) - response_size))
     {
         // Chyba nebo nedostatek místa v bufferu
@@ -239,7 +239,7 @@ void main_task_on(main_ctx_t *ctx, dataQueue_t *rxd)
 		case CMD_MAIN_RF_RX_PACKET:
 			rx_pkt = rxd->ptr;
 			
-			AT_SendRfPacketResponse(rx_pkt->packet, rx_pkt->rx_rssi,rx_pkt->size);
+			AT_SendRfPacketResponse(rx_pkt->packet, rx_pkt->rx_rssi, rx_pkt->rx_snr, rx_pkt->size);
 			vPortFree(rx_pkt->packet);
 			rx_pkt->packet=NULL;
 
@@ -261,6 +261,11 @@ void main_task_on(main_ctx_t *ctx, dataQueue_t *rxd)
                 xTimerStart(ctx->timers.Periodic_RF_TX.timer, 0);
             }
             // Pokud je timer ID NULL, periodické TX bylo zastaveno - nedělat nic
+            break;
+
+        case CMD_MAIN_RF_RADIO_ERROR:
+            // Radio se nepodarilo inicializovat / nereaguje - info pro uzivatele, bez resetu
+            AT_SendStringResponse("+RADIO:ERROR\r\n");
             break;
 
 		case CMD_MAIN_AT_RX_PACKET:
