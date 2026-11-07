@@ -142,7 +142,7 @@ Ropixon AT-USB LoRa Dongle, FW: v1.1.0, HW: <freq_band> <osc_type> v1.0, Build: 
 
 **Capabilities (`AT+CAPS`)** - one line, comma-separated tokens, no spaces, no trailing `OK`:
 ```
-+CAPS:HOST_V1,TX_DONE,RX_TO_UART,RX_FORMAT,RX_SNR,RADIO_ERR,TX_SAVED,TX_CW,TOA,AUX,AUX_PWM_HW,UART_BAUD
++CAPS:HOST_V1,TX_DONE,RX_TO_UART,RX_FORMAT,RX_SNR,RADIO_ERR,TX_SAVED,TX_CW,TX_LBT,TOA,AUX,AUX_PWM_HW,UART_BAUD
 ```
 `HOST_V1` is always present and marks support of host protocol v1 (required by the Python host driver). Host applications should search for individual tokens rather than compare the whole line.
 
@@ -203,8 +203,11 @@ AT+LR_RX_SET=SF:7,BW:7,CR:45,Freq:869525000,IQInv:0,HeaderMode:0,CRC:1,Preamble:
 |---------|-------------|---------|
 | `AT+RF_TX_HEX` | Transmit data in HEX format | `AT+RF_TX_HEX=48656C6C6F` |
 | `AT+RF_TX_TXT` | Transmit data as text | `AT+RF_TX_TXT=Hello` |
+| `AT+RF_TX_LBT` | Transmit HEX data after a channel check (CAD) | `AT+RF_TX_LBT=500,0,48656C6C6F` |
 | `AT+RF_RX_TO_UART` | Enable/disable RX output | `AT+RF_RX_TO_UART=1` |
 | `AT+RF_RX_FORMAT` | RX data output format | `AT+RF_RX_FORMAT=HEX` |
+
+**Listen before talk:** `AT+RF_TX_LBT=<max_ms>,<force>,<HEX data>` checks the channel with CAD using the TX settings. If the channel is free, the packet is sent at once. If it is busy, the dongle stays in RX and retries after a random delay, for at most `max_ms` (0-600000, 0 = a single check). If the channel is still busy after `max_ms`, the packet is sent anyway with `force=1` and discarded with `+TX:BUSY` with `force=0`. CAD detects only LoRa traffic with the same SF and BW. `AT+RF_TX_LBT` also stops periodic transmission.
 
 **Received data format:**
 ```
@@ -216,7 +219,13 @@ Example: `+RX:5,48656C6C6F,RSSI:-45,SNR:9` (5 bytes, data "Hello" in hex, RSSI -
 ```
 +TX:DONE
 ```
-Sent asynchronously after every completed RF transmission (`AT+RF_TX_HEX`, `AT+RF_TX_TXT`, `AT+RF_TX_SAVED` and each packet of `AT+RF_TX_SAVED_REPEAT`).
+Sent asynchronously after every completed RF transmission (`AT+RF_TX_HEX`, `AT+RF_TX_TXT`, `AT+RF_TX_LBT`, `AT+RF_TX_SAVED` and each packet of `AT+RF_TX_SAVED_REPEAT`).
+
+**Transmission discarded:**
+```
++TX:BUSY
+```
+Sent when an `AT+RF_TX_LBT` packet was not transmitted: the channel stayed busy, another `AT+RF_TX_LBT` was still pending, or another radio command (`AT+RF_TX_HEX`, `AT+RF_TX_CW`...) cancelled it.
 
 **Radio error:**
 ```

@@ -15,18 +15,6 @@
 #define RF_HEART_BEAT_TIMEOUT_MS			(3*CONST_1_MIN)
 #define RF_EVENT_LED_TIMEOUT_MS				(100)
 
-/*
- *
- */
-typedef struct
-{
-	uint8_t 	*packet;
-	uint8_t		size;
-	int16_t		rx_rssi;
-	int8_t		rx_snr;
-	uint8_t		rad;		//zatim nepotrebujem urcuje ktere radio patri k paketu
-}packet_info_t;
-
 
 /**
  * @brief 
@@ -53,6 +41,9 @@ void ru_radio_process_commands( RFCommands_e cmd,radio_context_t *ctx, const dat
 void ru_radio_process_IRQ( radio_context_t *ctx);
 radio_modes_e	ru_get_radio_last_status( radio_context_t	*ctx);
 bool ru_radio_send_packet(uint8_t *data, uint8_t size, radio_context_t	*ctx);
+void ru_radio_send_packet_lbt(packet_info_t *pkt, uint32_t max_delay_ms, bool tx_on_timeout, radio_context_t *ctx);
+void ru_radio_lbt_timer_event(radio_context_t *ctx);
+void ru_radio_lbt_abort(radio_context_t *ctx);
 bool ru_radioCleanAndStandby(ral_standby_cfg_t standbyMode, radio_context_t *ctx);
 bool ru_radioCleanAndSleep( bool onlySleep, radio_context_t *ctx);
 bool ru_radioInit(radio_context_t	*ctx);

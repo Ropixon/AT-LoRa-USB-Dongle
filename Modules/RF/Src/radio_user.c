@@ -554,6 +554,312 @@ void ru_radio_start_CAD(radio_context_t	*ctx)
 }
 
 
+/* ------------------------------------------------------------------------- */
+/* LBT - CAD pred vysilanim                                                  */
+/*                                                                           */
+/* CAD (parametry TX, CAD_ONLY) -> volno    -> TX                            */
+/*                              -> obsazeno -> RX + nahodny backoff -> CAD   */
+/*                                          -> deadline -> TX nebo +TX:BUSY  */
+/* ------------------------------------------------------------------------- */
+
+#define LBT_CAD_DET_MIN				10		// AN1200.48: pro vsechna SF
+#define LBT_CAD_TIMEOUT_MARGIN_MS	20		// rezerva pojistky proti ztracenemu CAD_DONE
+
+typedef struct
+{
+	uint8_t					det_peak;
+	ral_lora_cad_symbs_t	symb_nb;
+} lbt_cad_cfg_t;
+
+// AN1200.48 Table 1 (BW 125 kHz), index = SF7..SF12
+static const lbt_cad_cfg_t LBT_CAD_CFG_125[] = {
+	{ 22, RAL_LORA_CAD_02_SYMB },
+	{ 22, RAL_LORA_CAD_02_SYMB },
+	{ 23, RAL_LORA_CAD_04_SYMB },
+	{ 24, RAL_LORA_CAD_04_SYMB },
+	{ 25, RAL_LORA_CAD_04_SYMB },
+	{ 28, RAL_LORA_CAD_04_SYMB },
+};
+
+// AN1200.48 Table 43 (BW 500 kHz), SF12 peak 28 podle Tables 65-67
+static const lbt_cad_cfg_t LBT_CAD_CFG_500[] = {
+	{ 21, RAL_LORA_CAD_04_SYMB },
+	{ 22, RAL_LORA_CAD_04_SYMB },
+	{ 22, RAL_LORA_CAD_04_SYMB },
+	{ 23, RAL_LORA_CAD_04_SYMB },
+	{ 25, RAL_LORA_CAD_04_SYMB },
+	{ 28, RAL_LORA_CAD_08_SYMB },
+};
+
+/**
+ * @brief Parametry CAD podle SF a BW. SF5/SF6 a ostatni BW AN nemeri,
+ *        pouzije se nejblizsi SF a tabulka 125 kHz.
+ */
+static const lbt_cad_cfg_t *_lbt_get_cad_cfg(ral_lora_sf_t sf, ral_lora_bw_t bw)
+{
+	const lbt_cad_cfg_t *table = (bw == RAL_LORA_BW_500_KHZ) ? LBT_CAD_CFG_500 : LBT_CAD_CFG_125;
+
+	if (sf < RAL_LORA_SF7)  sf = RAL_LORA_SF7;
+	if (sf > RAL_LORA_SF12) sf = RAL_LORA_SF12;
+
+	return &table[sf - RAL_LORA_SF7];
+}
+
+/**
+ * @brief Pseudonahodne cislo pro backoff. Seed z UID, aby dva dongly nemely stejnou sekvenci.
+ *        Radiovy RNG nepouzivame, protoze by prerusil aktualni mod radia.
+ */
+static uint32_t _lbt_random(void)
+{
+	static uint32_t state = 0;
+
+	if (state == 0)
+	{
+		state = HAL_GetUIDw0() ^ HAL_GetUIDw1() ^ HAL_GetUIDw2() ^ HAL_GetTick();
+		if (state == 0) state = 1;
+	}
+
+	state ^= state << 13;
+	state ^= state >> 17;
+	state ^= state << 5;
+
+	return state;
+}
+
+/**
+ * @brief Nacte TX konfiguraci a spocita delku CAD.
+ *        Podle AN1200.48 trva CAD priblizne o 0.6-0.85 symbolu dele, nez je nastaveno.
+ */
+static const lbt_cad_cfg_t *_lbt_load_tx_config(radio_context_t *ctx)
+{
+	const lbt_cad_cfg_t *cfg;
+	ralf_params_lora_t *tx = &ctx->rfConfig.loraParam_tx;
+
+	tx->pkt_params.pld_len_in_bytes = ctx->lbt.pkt->size;
+	ru_load_radio_config_tx(tx);
+
+	cfg = _lbt_get_cad_cfg(tx->mod_params.sf, tx->mod_params.bw);
+
+	ctx->lbt.tcad_ms = (((1u << cfg->symb_nb) + 1u) * ru_calculate_symbol_time_us()) / 1000u;
+	if (ctx->lbt.tcad_ms == 0) ctx->lbt.tcad_ms = 1;
+
+	return cfg;
+}
+
+static void _lbt_arm_timer(radio_context_t *ctx, uint32_t delay_ms)
+{
+	TickType_t ticks = pdMS_TO_TICKS(delay_ms);
+
+	if (ticks == 0) ticks = 1;	// xTimerChangePeriod nulovou periodu neprijme
+
+	xTimerChangePeriod(ctx->timers.rfLbtTimer.timer, ticks, pdMS_TO_TICKS(100));
+}
+
+/**
+ * @brief Ukonci LBT a uvolni paket. Na radio nesaha.
+ */
+static void _lbt_release(radio_context_t *ctx)
+{
+	xTimerStop(ctx->timers.rfLbtTimer.timer, pdMS_TO_TICKS(100));
+
+	vPortFree(ctx->lbt.pkt->packet);
+	vPortFree(ctx->lbt.pkt);
+	ctx->lbt.pkt = NULL;
+}
+
+static void _lbt_report_busy(void)
+{
+	dataQueue_t txm;
+
+	txm.cmd = CMD_MAIN_RF_TX_BUSY;
+	txm.ptr = NULL;
+	MT_SendDataToMainTask(&txm, portMAX_DELAY);
+}
+
+static void _lbt_transmit(radio_context_t *ctx)
+{
+	packet_info_t *pkt = ctx->lbt.pkt;
+
+	ru_radioCleanAndStandby(RAL_STANDBY_CFG_XOSC, ctx);
+	ru_radio_send_packet(pkt->packet, pkt->size, ctx);
+
+	HW_LED_RF_EVENT_ON();
+	osTimerStart(ctx->timers.rfEventLedTimer.timer, pdMS_TO_TICKS(RF_EVENT_LED_TIMEOUT_MS));
+
+	LOG_INFO("LBT TX: %d B", pkt->size);
+	_lbt_release(ctx);
+}
+
+/**
+ * @brief Spusti CAD s parametry nasledneho TX. Stejny timer hlida i ztraceny CAD_DONE
+ *        a chybu SPI, oboje skonci jako obsazeny kanal.
+ */
+static void _lbt_start_cad(radio_context_t *ctx)
+{
+	ral_t *ral = &ctx->rfConfig.ralf.ral;
+	ralf_t *ralf = &ctx->rfConfig.ralf;
+	ral_status_t ret = RAL_STATUS_OK;
+	ral_lora_cad_params_t cadPar;
+	const lbt_cad_cfg_t *cfg;
+
+	ru_radioCleanAndStandby(RAL_STANDBY_CFG_RC, ctx);
+
+	// Backoff prepina radio na RX parametry, TX konfigurace se musi nahrat pri kazdem pokusu
+	cfg = _lbt_load_tx_config(ctx);
+
+	cadPar.cad_symb_nb = cfg->symb_nb;
+	cadPar.cad_det_peak_in_symb = cfg->det_peak;
+	cadPar.cad_det_min_in_symb = LBT_CAD_DET_MIN;
+	cadPar.cad_exit_mode = RAL_LORA_CAD_ONLY;
+	cadPar.cad_timeout_in_ms = 0;
+
+	ctx->rfConfig.lastMode = RF_MODE_LBT_CAD;
+
+	ret += ralf_setup_lora(ralf, &ctx->rfConfig.loraParam_tx);
+	ret += ral_set_dio_irq_params(ral, RAL_IRQ_CAD_DONE | RAL_IRQ_CAD_OK);
+	ret += ral_set_lora_cad_params(ral, &cadPar);
+	ret += ral_set_lora_cad(ral);
+
+	if (ret != RAL_STATUS_OK)
+	{
+		LOG_INFO("LBT CAD start failed");
+	}
+
+	_lbt_arm_timer(ctx, 2u * ctx->lbt.tcad_ms + LBT_CAD_TIMEOUT_MARGIN_MS);
+}
+
+/**
+ * @brief Pocka nahodnou dobu v RX, aby se prijal i paket, ktery obsadil kanal.
+ *
+ * @param remaining_ms cas, po ktery lze jeste zahajit dalsi CAD (> 0)
+ */
+static void _lbt_backoff(radio_context_t *ctx, uint32_t remaining_ms)
+{
+	uint32_t high = ru_calculate_toa_ms(ctx->lbt.pkt->size);
+	uint32_t low = ctx->lbt.tcad_ms;
+
+	if (high < low) high = low;
+	if (high > remaining_ms) high = remaining_ms;
+	if (low > high) low = high;
+
+	// Probihajici vlastni TX neprerusujeme, RX zapne jeho TX_DONE
+	if (ctx->rfConfig.lastMode != RF_MODE_TX)
+	{
+		ru_radio_start_rx(ctx);
+	}
+
+	_lbt_arm_timer(ctx, low + (_lbt_random() % (high - low + 1u)));
+}
+
+/**
+ * @brief Kanal je obsazeny: dalsi pokus, nebo konecne rozhodnuti po deadlinu.
+ */
+static void _lbt_on_busy(radio_context_t *ctx)
+{
+	// Dalsi CAD musi skoncit do deadlinu, proto odecitame jeho delku
+	int32_t remaining_ms = (int32_t)(ctx->lbt.deadline - xTaskGetTickCount()) * (int32_t)portTICK_PERIOD_MS
+							- (int32_t)ctx->lbt.tcad_ms;
+
+	if (remaining_ms > 0)
+	{
+		_lbt_backoff(ctx, (uint32_t)remaining_ms);
+	}
+	else if (ctx->lbt.tx_on_timeout)
+	{
+		_lbt_transmit(ctx);
+	}
+	else
+	{
+		_lbt_release(ctx);
+		_lbt_report_busy();
+
+		if (ctx->rfConfig.lastMode != RF_MODE_TX)
+		{
+			ru_radio_start_rx(ctx);
+		}
+	}
+}
+
+static void _lbt_attempt(radio_context_t *ctx)
+{
+	// Vlastni probihajici vysilani bereme jako obsazeny kanal
+	if (ctx->rfConfig.lastMode == RF_MODE_TX)
+	{
+		_lbt_on_busy(ctx);
+	}
+	else
+	{
+		_lbt_start_cad(ctx);
+	}
+}
+
+/**
+ * @brief Odesle paket az po overeni volneho kanalu. Vzdy prebira vlastnictvi pkt i pkt->packet.
+ *
+ * @param pkt           paket alokovany pres pvPortMalloc
+ * @param max_delay_ms  o kolik smi byt start TX odlozen, 0 = jediny CAD
+ * @param tx_on_timeout true = po deadlinu odeslat i do obsazeneho kanalu, false = +TX:BUSY
+ * @param ctx
+ */
+void ru_radio_send_packet_lbt(packet_info_t *pkt, uint32_t max_delay_ms, bool tx_on_timeout, radio_context_t *ctx)
+{
+	if (ctx->lbt.pkt != NULL)
+	{
+		// Bezi jine LBT, druhy paket neradime
+		vPortFree(pkt->packet);
+		vPortFree(pkt);
+		_lbt_report_busy();
+		return;
+	}
+
+	ctx->lbt.pkt = pkt;
+	ctx->lbt.deadline = xTaskGetTickCount() + pdMS_TO_TICKS(max_delay_ms);
+	ctx->lbt.tx_on_timeout = tx_on_timeout;
+
+	_lbt_load_tx_config(ctx);
+	_lbt_attempt(ctx);
+}
+
+/**
+ * @brief Vyprsel LBT timer (CMD_RF_LBT_RETRY).
+ *
+ * @param ctx
+ */
+void ru_radio_lbt_timer_event(radio_context_t *ctx)
+{
+	if (ctx->lbt.pkt == NULL)
+	{
+		return;		// zpozdena zprava, LBT uz skoncilo
+	}
+
+	if (ctx->rfConfig.lastMode == RF_MODE_LBT_CAD)
+	{
+		_lbt_on_busy(ctx);	// CAD_DONE neprisel
+	}
+	else
+	{
+		_lbt_attempt(ctx);
+	}
+}
+
+/**
+ * @brief Zrusi cekajici LBT bez ohledu na tx_on_timeout. Na radio nesaha,
+ *        o jeho dalsi stav se postara prikaz, ktery LBT rusi.
+ *
+ * @param ctx
+ */
+void ru_radio_lbt_abort(radio_context_t *ctx)
+{
+	if (ctx->lbt.pkt == NULL)
+	{
+		return;
+	}
+
+	_lbt_release(ctx);
+	_lbt_report_busy();
+}
+
+
 /**
  * @brief 
  * 
@@ -626,8 +932,12 @@ void ru_radio_process_commands(RFCommands_e cmd,radio_context_t *ctx, const data
 
 			break;
 
-		case RADIO_CMD_SEND_UNIVERSAL_PAYLOAD_LBT:
+		case RADIO_CMD_SEND_UNIVERSAL_PAYLOAD_LBT:	//CAD
+			ru_radio_send_packet_lbt((packet_info_t*)rxm->ptr, rxm->data, rxm->tmp_bool, ctx);
+			break;
 
+		case RADIO_CMD_STOP_TX_AND_DISCARD:
+			ru_radio_lbt_abort(ctx);
 			break;
 
 		case RADIO_CMD_START_RX:
@@ -752,6 +1062,22 @@ void ru_radio_process_IRQ(radio_context_t *ctx)
 				}
 			}
 			ru_radioCleanAndStandby(RAL_STANDBY_CFG_XOSC, ctx);
+			break;
+
+		case RF_MODE_LBT_CAD:
+			if ((irqSet & RAL_IRQ_CAD_DONE) == 0)
+			{
+				break;	// opozdene IRQ z predchoziho RX, CAD jeste bezi
+			}
+
+			if (irqSet & RAL_IRQ_CAD_OK)
+			{
+				_lbt_on_busy(ctx);
+			}
+			else
+			{
+				_lbt_transmit(ctx);
+			}
 			break;
 
 		case RF_MODE_IDLE:

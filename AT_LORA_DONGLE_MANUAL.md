@@ -85,7 +85,7 @@ Dongle odpoví "Ropixon AT-USB LoRa Dongle, FW: v1.1.0, HW: <freq_band> <osc_typ
 
 **Schopnosti firmware (`AT+CAPS`)** - jeden řádek, tokeny oddělené čárkou, bez mezer, bez `OK` na konci:
 ```
-+CAPS:HOST_V1,TX_DONE,RX_TO_UART,RX_FORMAT,RX_SNR,RADIO_ERR,TX_SAVED,TX_CW,TOA,AUX,AUX_PWM_HW,UART_BAUD
++CAPS:HOST_V1,TX_DONE,RX_TO_UART,RX_FORMAT,RX_SNR,RADIO_ERR,TX_SAVED,TX_CW,TX_LBT,TOA,AUX,AUX_PWM_HW,UART_BAUD
 ```
 `HOST_V1` je vždy přítomen a označuje podporu host protokolu v1 (vyžaduje ho Python driver). Host aplikace má hledat jednotlivé tokeny, ne porovnávat celý řádek.
 
@@ -153,8 +153,11 @@ AT+LR_RX_SET=SF:7,BW:7,CR:45,Freq:869525000,IQInv:0,HeaderMode:0,CRC:1,Preamble:
 |--------|-------|---------|
 | `AT+RF_TX_HEX` | Vyslat data v HEX formátu | `AT+RF_TX_HEX=48656C6C6F` |
 | `AT+RF_TX_TXT` | Vyslat data jako text | `AT+RF_TX_TXT=Hello` |
+| `AT+RF_TX_LBT` | Vyslat HEX data po kontrole kanálu (CAD) | `AT+RF_TX_LBT=500,0,48656C6C6F` |
 | `AT+RF_RX_TO_UART` | Příjem na UART zapnout/vypnout | `AT+RF_RX_TO_UART=1` |
 | `AT+RF_RX_FORMAT` | Formát výstupu RX dat | `AT+RF_RX_FORMAT=HEX` |
+
+**Listen before talk:** `AT+RF_TX_LBT=<max_ms>,<force>,<HEX data>` ověří kanál pomocí CAD s TX parametry. Když je kanál volný, paket se odešle hned. Když je obsazený, dongle zůstane v RX a po náhodné prodlevě to zkusí znovu, nejdéle `max_ms` (0-600000, 0 = jediná kontrola). Pokud je kanál po `max_ms` stále obsazený, paket se při `force=1` přesto odešle a při `force=0` se zahodí a vypíše se `+TX:BUSY`. CAD detekuje jen LoRa provoz se stejným SF a BW. `AT+RF_TX_LBT` také zastaví periodické vysílání.
 
 **Přijatá data se zobrazí automaticky** (pokud je povoleno RX_TO_UART=1 (ON), =0 (OFF), ?):
 Formát výpisu přijatých dat
@@ -167,7 +170,13 @@ Kde 5 = počet přijatých bajtů, 48656C6C6F = samotný paket, -45 = RSSI paket
 ```
 +TX:DONE
 ```
-Vypíše se po každém dokončeném RF vysílání (`AT+RF_TX_HEX`, `AT+RF_TX_TXT`, `AT+RF_TX_SAVED` a každý paket z `AT+RF_TX_SAVED_REPEAT`).
+Vypíše se po každém dokončeném RF vysílání (`AT+RF_TX_HEX`, `AT+RF_TX_TXT`, `AT+RF_TX_LBT`, `AT+RF_TX_SAVED` a každý paket z `AT+RF_TX_SAVED_REPEAT`).
+
+**Zahození vysílání** se oznámí automaticky:
+```
++TX:BUSY
+```
+Vypíše se, pokud se paket z `AT+RF_TX_LBT` neodeslal: kanál zůstal obsazený, ještě čekal jiný `AT+RF_TX_LBT`, nebo vysílání zrušil jiný rádiový příkaz (`AT+RF_TX_HEX`, `AT+RF_TX_CW`...).
 
 **Chyba rádia** se oznámí automaticky:
 ```

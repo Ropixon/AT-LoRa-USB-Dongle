@@ -70,6 +70,26 @@ static void _RF_EventLed_Callback(TimerHandle_t timer)
 	HW_LED_RF_EVENT_OFF();
 }
 
+static void _RF_Lbt_Callback(TimerHandle_t timer)
+{
+	UNUSED(timer);
+	dataQueue_t txm;
+	txm.ptr = NULL;
+
+	txm.cmd = CMD_RF_LBT_RETRY;
+	RT_SendDataToRFTask(&txm, portMAX_DELAY);
+}
+
+/**
+ * @brief Uvolni TX paket, ktery nelze odeslat, a nahlasi chybu radia.
+ *        Strukturu packet_info_t uvolni radio_task.
+ */
+static void _RF_RejectTxPacket(dataQueue_t *rxd)
+{
+	vPortFree(((packet_info_t*)rxd->ptr)->packet);
+	_RF_ReportRadioError();
+}
+
 /*
  *
  */
@@ -105,6 +125,11 @@ void radio_task_off(radio_context_t *ctx,dataQueue_t *rxd)
 			ctx->rfTaskState.currentState = RF_TASK_OFF;
 			break;
 
+		case CMD_RF_SEND_DATA_NOW:
+		case CMD_RF_SEND_DATA_LBT:
+			_RF_RejectTxPacket(rxd);
+			break;
+
 		default:
 			break;
 	}
@@ -133,8 +158,8 @@ void radio_task_on(radio_context_t *ctx, dataQueue_t *rxd)
 				return;
 
 			case CMD_RF_SEND_DATA_NOW:
-				vPortFree(((packet_info_t*)rxd->ptr)->packet);
-				_RF_ReportRadioError();
+			case CMD_RF_SEND_DATA_LBT:
+				_RF_RejectTxPacket(rxd);
 				return;
 
 			case CMD_RF_TX_CW:
@@ -153,6 +178,8 @@ void radio_task_on(radio_context_t *ctx, dataQueue_t *rxd)
 	switch (rxd->cmd)
 	{
 		case CMD_RF_TURN_ON:
+			ru_radio_process_commands(RADIO_CMD_STOP_TX_AND_DISCARD, ctx, rxd);
+
 			if (_RF_InitRadio(ctx))
 			{
 				ru_radio_process_commands(RADIO_CMD_START_RX, ctx, rxd);
@@ -166,6 +193,7 @@ void radio_task_on(radio_context_t *ctx, dataQueue_t *rxd)
 			break;
 
 		case CMD_RF_TURN_OFF:
+			ru_radio_process_commands(RADIO_CMD_STOP_TX_AND_DISCARD, ctx, rxd);
 			ru_radio_process_commands(RADIO_CMD_SLEEP,ctx,rxd);
 
 			sd.cmd = CMD_CORE_RF_IS_OFF;
@@ -180,7 +208,17 @@ void radio_task_on(radio_context_t *ctx, dataQueue_t *rxd)
 			break;
 
 		case CMD_RF_SEND_DATA_NOW:
+			ru_radio_process_commands(RADIO_CMD_STOP_TX_AND_DISCARD, ctx, rxd);
 			ru_radio_process_commands(RADIO_CMD_SEND_UNIVERSAL_PAYLOAD_NOW,ctx,rxd);
+			break;
+
+		case CMD_RF_SEND_DATA_LBT:
+			ru_radio_process_commands(RADIO_CMD_SEND_UNIVERSAL_PAYLOAD_LBT, ctx, rxd);
+			rxd->ptr = NULL;	// paket prevzalo LBT, radio_task ho nesmi uvolnit
+			break;
+
+		case CMD_RF_LBT_RETRY:
+			ru_radio_lbt_timer_event(ctx);
 			break;
 
 		case CMD_RF_RADIO_RX_TO_UART:
@@ -208,6 +246,8 @@ void radio_task_on(radio_context_t *ctx, dataQueue_t *rxd)
 			break;
 
 		case CMD_RF_TX_CW:
+			ru_radio_process_commands(RADIO_CMD_STOP_TX_AND_DISCARD, ctx, rxd);
+
 			if (rxd->data == 1)
 			{
 				// Start TX CW mode
@@ -265,6 +305,10 @@ void radio_task(void)
    	    		pdFALSE, NULL, _RF_HeartBeat_Callback,  &ctx.timers.rfHBTimer.timerPlace);
 	ctx.timers.rfEventLedTimer.timer = xTimerCreateStatic("RF_Event_LED", pdMS_TO_TICKS(RF_EVENT_LED_TIMEOUT_MS), 
 							pdFALSE, NULL, _RF_EventLed_Callback, &ctx.timers.rfEventLedTimer.timerPlace);
+	ctx.timers.rfLbtTimer.timer = xTimerCreateStatic("RF_LBT", 1,
+							pdFALSE, NULL, _RF_Lbt_Callback, &ctx.timers.rfLbtTimer.timerPlace);
+
+	ctx.lbt.pkt = NULL;
 
 	ru_sx1262_assign(&ctx);
 

@@ -263,6 +263,12 @@ void main_task_on(main_ctx_t *ctx, dataQueue_t *rxd)
             // Pokud je timer ID NULL, periodické TX bylo zastaveno - nedělat nic
             break;
 
+        case CMD_MAIN_RF_TX_BUSY:
+            // LBT paket se neodeslal: kanal zustal obsazeny, nebo bylo vysilani zruseno.
+            // Periodicke TX nepouziva LBT, timer se tady nerestartuje.
+            AT_SendStringResponse("+TX:BUSY\r\n");
+            break;
+
         case CMD_MAIN_RF_RADIO_ERROR:
             // Radio se nepodarilo inicializovat / nereaguje - info pro uzivatele, bez resetu
             AT_SendStringResponse("+RADIO:ERROR\r\n");

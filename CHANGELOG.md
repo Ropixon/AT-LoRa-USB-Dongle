@@ -3,6 +3,11 @@
 All notable changes to this firmware are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org/) and match the value returned by `AT+IDENTIFY` (`FW_VERSION_MAJOR.MINOR.PATCH` in `Modules/ATInterface/AT_cmd.h`).
 
+## [1.4.0] - 2026-11-07
+### Added
+- `AT+RF_TX_LBT=<max_ms>,<force>,<HEX data>` - transmit after a CAD channel check. While the channel is busy the dongle stays in RX and retries after a random backoff, for at most `max_ms`. After that the packet is sent anyway (`force=1`) or discarded (`force=0`). New `AT+CAPS` token `TX_LBT`.
+- `+TX:BUSY` asynchronous notification - an `AT+RF_TX_LBT` packet was discarded because the channel stayed busy, or the pending transmission was cancelled by another radio command.
+
 ## [1.3.0] - 2026-10-22
 ### Added
 - `+RX:` notification now includes packet SNR: `+RX:<len>,<data>,RSSI:<rssi>,SNR:<snr>` (SNR in dB). New `AT+CAPS` token `RX_SNR`.

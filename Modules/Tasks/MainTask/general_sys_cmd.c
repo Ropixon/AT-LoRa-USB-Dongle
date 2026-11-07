@@ -43,6 +43,7 @@ const AT_CommandLimit_t AT_CommandLimits[] = {
     {SYS_CMD_PREAM_SIZE_RX, 1, 65535, 5},          // RX preamble size (1 to 65535, max 5 znaků)
     {SYS_CMD_RF_TX_HEX, 0, 255, 512},              // RF TX HEX (max 512 znaků pro HEX data)
     {SYS_CMD_RF_TX_TXT, 0, 255, 512},              // RF TX TXT (max 512 znaků pro textová data)
+    {SYS_CMD_RF_TX_LBT, 0, 600000, 6},             // RF TX LBT max. odložení v ms (max 6 znaků)
     {SYS_CMD_RF_TX_NVM_PERIOD, 1, 65535, 5},       // RF NVM packet periodic TX period (1 to 65535 ms, max 5 znaků)
     {SYS_CMD_RF_TX_PERIODIC_NVM, 0, 0, 3},         // RF periodic NVM packet TX control (ON/OFF, max 3 znaky)
     {SYS_CMD_RF_SAVE_PCKT_NVM, 0, 255, 512},       // Save RF packet to NVM (max 512 znaků pro HEX data)
@@ -65,6 +66,8 @@ const uint32_t AllowedBandwidths[] = {7810, 10420, 15630, 20830, 31250, 41670, 6
 const size_t AllowedBandwidthCount = sizeof(AllowedBandwidths) / sizeof(AllowedBandwidths[0]);
 
 static void _GSC_Handle_TX(uint8_t *data, uint8_t size);
+static void _GSC_Queue_TX(uint32_t cmd, uint8_t *data, uint8_t size, uint32_t maxDelayMs, bool force);
+static bool _GSC_Handle_TX_LBT(uint8_t *data);
 static bool GetCommandLimits(eATCommands cmd, int32_t *minValue, int32_t *maxValue, size_t *maxLength);
 static uint8_t HexStringToByteArray(const char *hexStr, uint8_t *byteArray, size_t byteArraySize);
 static void ByteArrayToHexString(const uint8_t *byteArray, size_t arraySize, char *hexStr, size_t hexStrSize);
@@ -1367,8 +1370,16 @@ bool GSC_ProcessCommand(eATCommands cmd, uint8_t *data, uint16_t size)
             break;
         }
 
+        case SYS_CMD_RF_TX_LBT:
+            if (_GSC_Handle_TX_LBT(data) == false)
+            {
+                AT_SendStringResponse("ERROR: Invalid RF_TX_LBT value\r\n");
+                commandHandled = false;
+            }
+            break;
+
         case SYS_CMD_RF_TX_NVM_ONCE:
-        {   
+        {
             StopPeriodicTx(); // Stop periodic TX if running
             uint8_t tx;
 
@@ -1850,7 +1861,68 @@ bool GSC_ProcessCommand(eATCommands cmd, uint8_t *data, uint16_t size)
  * @return false 
  */
 static void _GSC_Handle_TX(uint8_t *data, uint8_t size)
-{   
+{
+    _GSC_Queue_TX(CMD_RF_SEND_DATA_NOW, data, size, 0, false);
+}
+
+/**
+ * @brief Handle AT+RF_TX_LBT=<max_ms>,<force>,<HEX data>
+ *
+ * @param data parametry prikazu, oddelovace se prepisou na '\0'
+ * @return true paket predan RF tasku
+ * @return false neplatne parametry
+ */
+static bool _GSC_Handle_TX_LBT(uint8_t *data)
+{
+    uint8_t  packetSize;
+    uint8_t  force;
+    uint32_t maxDelayMs;
+    int32_t  maxValue;
+    size_t   maxLength;
+    char     *forceStr = strchr((char *)data, ',');
+    char     *hexStr = (forceStr != NULL) ? strchr(forceStr + 1, ',') : NULL;
+
+    if (hexStr == NULL || !GetCommandLimits(SYS_CMD_RF_TX_LBT, NULL, &maxValue, &maxLength))
+    {
+        return false;
+    }
+
+    *forceStr++ = '\0';
+    *hexStr++ = '\0';
+
+    if (AT_ParseUint32(data, &maxDelayMs, maxLength) == 0 || maxDelayMs > (uint32_t)maxValue)
+    {
+        return false;
+    }
+
+    if (!ParseBoolValue(forceStr, &force))
+    {
+        return false;
+    }
+
+    // Dekodovani na miste - GSC_ProcessCommand ma velky ramec a dalsi 256B buffer by ohrozil stack tasku
+    packetSize = HexStringToByteArray(hexStr, (uint8_t *)hexStr, UINT8_MAX);
+    if (packetSize == 0)
+    {
+        return false;
+    }
+
+    StopPeriodicTx(); // Stop periodic TX if running
+    _GSC_Queue_TX(CMD_RF_SEND_DATA_LBT, (uint8_t *)hexStr, packetSize, maxDelayMs, force == 1);
+    return true;
+}
+
+/**
+ * @brief Zkopiruje paket a preda ho RF tasku
+ *
+ * @param cmd        CMD_RF_SEND_DATA_NOW nebo CMD_RF_SEND_DATA_LBT
+ * @param data
+ * @param size
+ * @param maxDelayMs LBT: max. odlozeni TX
+ * @param force      LBT: po deadlinu odeslat i do obsazeneho kanalu
+ */
+static void _GSC_Queue_TX(uint32_t cmd, uint8_t *data, uint8_t size, uint32_t maxDelayMs, bool force)
+{
     dataQueue_t     txm;
     packet_info_t	*tx_pkt;
     uint8_t         *tx_raw_data;
@@ -1873,7 +1945,9 @@ static void _GSC_Handle_TX(uint8_t *data, uint8_t size)
     tx_pkt->size = size;
     
     txm.ptr = tx_pkt;
-    txm.cmd = CMD_RF_SEND_DATA_NOW;
+    txm.cmd = cmd;
+    txm.data = maxDelayMs;
+    txm.tmp_bool = force;
 
     RT_SendDataToRFTask(&txm, portMAX_DELAY);
 }

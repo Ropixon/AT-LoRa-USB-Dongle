@@ -15,7 +15,7 @@
 
 /* Firmware version */
 #define FW_VERSION_MAJOR    1
-#define FW_VERSION_MINOR    3
+#define FW_VERSION_MINOR    4
 #define FW_VERSION_PATCH    0
 #define FW_DEVICE_NAME      "Ropixon AT-USB LoRa Dongle"
 
@@ -37,6 +37,7 @@ typedef enum
     SYS_CMD_RF_TX_PERIODIC_NVM  = 9, 
     SYS_CMD_RF_SAVE_PCKT_NVM    = 10,
     SYS_CMD_RF_PERIOD_STATUS    = 11,
+    SYS_CMD_RF_TX_LBT           = 12,
 
     /* LoRa SX1262-specific commands */
     SYS_CMD_TX_FREQ         = 20,

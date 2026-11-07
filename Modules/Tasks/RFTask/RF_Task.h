@@ -22,6 +22,7 @@ typedef enum
 	RF_MODE_TX		=	2,
 	RF_MODE_CAD		=	3,
 	RF_MODE_IDLE	=	4,
+	RF_MODE_LBT_CAD	=	5,
 
 }radio_modes_e;
 
@@ -34,6 +35,29 @@ typedef struct{
 	uint8_t	 size;
 
 }payloadSend_t;
+
+/*
+ *
+ */
+typedef struct
+{
+	uint8_t 	*packet;
+	uint8_t		size;
+	int16_t		rx_rssi;
+	int8_t		rx_snr;
+	uint8_t		rad;		//zatim nepotrebujem urcuje ktere radio patri k paketu
+}packet_info_t;
+
+/*
+ * Stav cekajiciho LBT vysilani
+ */
+typedef struct
+{
+	packet_info_t	*pkt;			//NULL = zadne LBT nebezi, jinak LBT vlastni paket
+	TickType_t		deadline;		//nejzazsi cas startu TX
+	uint32_t		tcad_ms;		//odhad delky jednoho CAD
+	bool			tx_on_timeout;	//po deadlinu odeslat i do obsazeneho kanalu
+}lbt_ctx_t;
 
 /*
  *
@@ -114,6 +138,7 @@ typedef struct
 	TimerResource_t	rfHBTimer;	// pokud SX1262 nevykona delsi dobu zadnou akci,
 								// tak ho znovu aktivujeme
 	TimerResource_t rfEventLedTimer; // LED indikace udalosti (RX/TX)
+	TimerResource_t rfLbtTimer;		// LBT: backoff a pojistka proti ztracenemu CAD_DONE
 
 
 }RFTimers_t;
@@ -125,6 +150,7 @@ typedef struct
 	RFTimers_t			timers;
 	bool				rx_to_uart;		//true, false
 	bool				radio_ok;		//false = init SX1262 selhal, na radio nesahame
+	lbt_ctx_t			lbt;
 
 } radio_context_t;
 
