@@ -147,7 +147,7 @@ Ropixon AT-USB LoRa Dongle, FW: v1.1.0, HW: <freq_band> <osc_type> v1.0, Build: 
 
 **Capabilities (`AT+CAPS`)** - one line, comma-separated tokens, no spaces, no trailing `OK`:
 ```
-+CAPS:HOST_V1,TX_DONE,RX_TO_UART,RX_FORMAT,RX_SNR,RADIO_ERR,TX_SAVED,TX_CW,TX_LBT,TOA,AUX,AUX_PWM_HW,UART_BAUD
++CAPS:HOST_V1,TX_DONE,RX_TO_UART,RX_FORMAT,RX_SNR,RADIO_ERR,TX_SAVED,TX_CW,TX_LBT,CAD,TOA,AUX,AUX_PWM_HW,UART_BAUD
 ```
 `HOST_V1` is always present and marks support of host protocol v1 (required by the Python host driver). Host applications should search for individual tokens rather than compare the whole line.
 
@@ -209,10 +209,13 @@ AT+LR_RX_SET=SF:7,BW:7,CR:45,Freq:869525000,IQInv:0,HeaderMode:0,CRC:1,Preamble:
 | `AT+RF_TX_HEX` | Transmit data in HEX format | `AT+RF_TX_HEX=48656C6C6F` |
 | `AT+RF_TX_TXT` | Transmit data as text | `AT+RF_TX_TXT=Hello` |
 | `AT+RF_TX_LBT` | Transmit HEX data after a channel check (CAD) | `AT+RF_TX_LBT=500,0,48656C6C6F` |
+| `AT+RF_CAD` | Check the channel with CAD, no transmission | `AT+RF_CAD` |
 | `AT+RF_RX_TO_UART` | Enable/disable RX output | `AT+RF_RX_TO_UART=1` |
 | `AT+RF_RX_FORMAT` | RX data output format | `AT+RF_RX_FORMAT=HEX` |
 
 **Listen before talk:** `AT+RF_TX_LBT=<max_ms>,<force>,<HEX data>` checks the channel with CAD using the TX settings. If the channel is free, the packet is sent at once. If it is busy, the dongle stays in RX and retries after a random delay, for at most `max_ms` (0-600000, 0 = a single check). If the channel is still busy after `max_ms`, the packet is sent anyway with `force=1` and discarded with `+TX:BUSY` with `force=0`. CAD detects only LoRa traffic with the same SF and BW. `AT+RF_TX_LBT` also stops periodic transmission.
+
+**Channel check only:** `AT+RF_CAD` runs a single CAD with the same TX settings as `AT+RF_TX_LBT` and sends nothing. It answers `OK` and then asynchronously `+CAD:FREE` (no LoRa activity found) or `+CAD:BUSY` (LoRa preamble or data detected, or the dongle is transmitting itself). `+CAD:ERROR` means the check did not finish: an `AT+RF_TX_LBT` was pending, another radio command interrupted it, or the radio did not report a result. Afterwards the dongle returns to RX. One CAD takes only a few symbols, so a free result means the channel was free at that moment.
 
 **Received data format:**
 ```
@@ -226,6 +229,14 @@ Example: `+RX:5,48656C6C6F,RSSI:-45,SNR:9` (5 bytes, data "Hello" in hex, RSSI -
 ```
 Sent asynchronously after every completed RF transmission (`AT+RF_TX_HEX`, `AT+RF_TX_TXT`, `AT+RF_TX_LBT`, `AT+RF_TX_SAVED` and each packet of `AT+RF_TX_SAVED_REPEAT`).
 
+**Channel check result:**
+```
++CAD:FREE
++CAD:BUSY
++CAD:ERROR
+```
+Result of `AT+RF_CAD` (see above).
+
 **Transmission discarded:**
 ```
 +TX:BUSY
@@ -236,7 +247,7 @@ Sent when an `AT+RF_TX_LBT` packet was not transmitted: the channel stayed busy,
 ```
 +RADIO:ERROR
 ```
-Sent when the LoRa radio (SX1262) could not be initialized at startup, or when a transmission (`AT+RF_TX_*`, `AT+RF_TX_CW`) is requested while the radio is not working. The dongle does not restart in this case - AT commands keep working, but no `+TX:DONE` / `+RX:` will follow. Check the hardware and use `AT+SYS_RESTART` to try again.
+Sent when the LoRa radio (SX1262) could not be initialized at startup, or when a transmission (`AT+RF_TX_*`, `AT+RF_TX_CW`) or a channel check (`AT+RF_CAD`) is requested while the radio is not working. The dongle does not restart in this case - AT commands keep working, but no `+TX:DONE` / `+RX:` will follow. Check the hardware and use `AT+SYS_RESTART` to try again.
 
 ### Saved Packets and Periodic Transmission
 

@@ -269,6 +269,22 @@ void main_task_on(main_ctx_t *ctx, dataQueue_t *rxd)
             AT_SendStringResponse("+TX:BUSY\r\n");
             break;
 
+        case CMD_MAIN_RF_CAD_RESULT:
+            // Vysledek AT+RF_CAD
+            if (rxd->data == CAD_RESULT_FREE)
+            {
+                AT_SendStringResponse("+CAD:FREE\r\n");
+            }
+            else if (rxd->data == CAD_RESULT_BUSY)
+            {
+                AT_SendStringResponse("+CAD:BUSY\r\n");
+            }
+            else
+            {
+                AT_SendStringResponse("+CAD:ERROR\r\n");
+            }
+            break;
+
         case CMD_MAIN_RF_RADIO_ERROR:
             // Radio se nepodarilo inicializovat / nereaguje - info pro uzivatele, bez resetu
             AT_SendStringResponse("+RADIO:ERROR\r\n");

@@ -49,7 +49,7 @@ bool ru_radioCleanAndSleep( bool onlySleep, radio_context_t *ctx);
 bool ru_radioInit(radio_context_t	*ctx);
 void ru_sx1262_assign( radio_context_t	*ctx);
 void ru_radio_rfSwitch(bool tx,radio_context_t	*ctx);
-void ru_radio_start_CAD(radio_context_t	*ctx);
+void ru_radio_cad_check(radio_context_t *ctx);
 void ru_radio_start_rx(radio_context_t	*ctx);
 uint32_t ru_calculate_toa_ms(uint8_t packetSize);
 uint32_t ru_calculate_symbol_time_us(void);

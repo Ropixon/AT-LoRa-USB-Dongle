@@ -91,7 +91,8 @@ const AT_Command_Struct AT_Commands[] = {
     {"AT+RF_TX_HEX",                NULL,               SYS_CMD_RF_TX_HEX,                   "AT+RF_TX_HEX - Transmit data via RF in HEX format",  "=<HEX data>"},
     {"AT+RF_TX_TXT",                NULL,               SYS_CMD_RF_TX_TXT,                   "AT+RF_TX_TXT - Transmit data via RF in text format", "=<Text data>"},
     {"AT+RF_TX_LBT",                NULL,               SYS_CMD_RF_TX_LBT,                   "AT+RF_TX_LBT - Transmit HEX data after CAD channel check", "=<max_ms:0-600000>,<force:0|1>,<HEX data>"},
-    
+    {"AT+RF_CAD",                   NULL,               SYS_CMD_RF_CAD,                      "AT+RF_CAD - Check channel with CAD (TX config), no TX", ""},
+
     /* RF saved packet commands */
     {"AT+RF_SAVE_PACKET",           NULL,               SYS_CMD_RF_SAVE_PCKT_NVM,            "AT+RF_SAVE_PACKET - Save packet to memory",       "=<HEX data>, ?"},
     {"AT+RF_TX_SAVED",              NULL,               SYS_CMD_RF_TX_NVM_ONCE,              "AT+RF_TX_SAVED - Send saved packet once",         ""},
@@ -217,7 +218,8 @@ void AT_HandleATCommand(uint16_t size)
 
             if(AT_Commands[i].simpleHandler == NULL)
             {      
-                if (noParam == true)
+                // Prikazy s prazdnym popisem parametru (AT+RF_CAD, AT+RF_GET_TSYM) jdou i bez '='
+                if (noParam == true && AT_Commands[i].parameters[0] != '\0')
                 {
                     AT_SendStringResponse("ERROR - Missing parameters\r\n");
                     break;
@@ -366,6 +368,7 @@ static void AT_HandleHelp(char *params)
     AT_SendStringResponse("+RX:<len>,<data>,RSSI:<rssi>,SNR:<snr> - Received RF packet (if AT+RF_RX_TO_UART=1)\r\n");
     AT_SendStringResponse("+TX:DONE - RF transmission finished\r\n");
     AT_SendStringResponse("+TX:BUSY - AT+RF_TX_LBT packet discarded (channel busy or TX cancelled)\r\n");
+    AT_SendStringResponse("+CAD:FREE|BUSY|ERROR - AT+RF_CAD result\r\n");
     AT_SendStringResponse("+RADIO:ERROR - Radio not initialized / not responding\r\n");
 
     // Add examples for complex commands
@@ -417,7 +420,7 @@ static void AT_HandleCaps(char *params)
 {
     UNUSED(params);
 
-    AT_SendStringResponse("+CAPS:HOST_V1,TX_DONE,RX_TO_UART,RX_FORMAT,RX_SNR,RADIO_ERR,TX_SAVED,TX_CW,TX_LBT,TOA,AUX,AUX_PWM_HW,UART_BAUD\r\n");
+    AT_SendStringResponse("+CAPS:HOST_V1,TX_DONE,RX_TO_UART,RX_FORMAT,RX_SNR,RADIO_ERR,TX_SAVED,TX_CW,TX_LBT,CAD,TOA,AUX,AUX_PWM_HW,UART_BAUD\r\n");
 }
 
 

@@ -38,6 +38,7 @@ typedef enum
     SYS_CMD_RF_SAVE_PCKT_NVM    = 10,
     SYS_CMD_RF_PERIOD_STATUS    = 11,
     SYS_CMD_RF_TX_LBT           = 12,
+    SYS_CMD_RF_CAD              = 13,
 
     /* LoRa SX1262-specific commands */
     SYS_CMD_TX_FREQ         = 20,

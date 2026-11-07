@@ -130,6 +130,10 @@ void radio_task_off(radio_context_t *ctx,dataQueue_t *rxd)
 			_RF_RejectTxPacket(rxd);
 			break;
 
+		case CMD_RF_CAD_CHECK:
+			_RF_ReportRadioError();
+			break;
+
 		default:
 			break;
 	}
@@ -163,6 +167,7 @@ void radio_task_on(radio_context_t *ctx, dataQueue_t *rxd)
 				return;
 
 			case CMD_RF_TX_CW:
+			case CMD_RF_CAD_CHECK:
 				_RF_ReportRadioError();
 				return;
 
@@ -219,6 +224,10 @@ void radio_task_on(radio_context_t *ctx, dataQueue_t *rxd)
 
 		case CMD_RF_LBT_RETRY:
 			ru_radio_lbt_timer_event(ctx);
+			break;
+
+		case CMD_RF_CAD_CHECK:
+			ru_radio_process_commands(RADIO_CMD_START_CAD, ctx, rxd);
 			break;
 
 		case CMD_RF_RADIO_RX_TO_UART:
@@ -309,6 +318,7 @@ void radio_task(void)
 							pdFALSE, NULL, _RF_Lbt_Callback, &ctx.timers.rfLbtTimer.timerPlace);
 
 	ctx.lbt.pkt = NULL;
+	ctx.lbt.cad_only = false;
 
 	ru_sx1262_assign(&ctx);
 

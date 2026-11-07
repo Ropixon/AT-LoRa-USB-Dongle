@@ -54,8 +54,7 @@ const AT_CommandLimit_t AT_CommandLimits[] = {
 
 
 
-// Timer pro debouncing RX rekonfigurace
-static TimerHandle_t rxReconfigTimer = NULL;
+// Debouncing RX rekonfigurace (timer zatim nepouzivame, viz TriggerRxReconfig)
 #define RX_RECONFIG_DELAY_MS 50  // Prodleva před odesláním rekonfigurace
 
 // Timer handle pro periodické RF vysílání
@@ -1377,6 +1376,21 @@ bool GSC_ProcessCommand(eATCommands cmd, uint8_t *data, uint16_t size)
                 commandHandled = false;
             }
             break;
+
+        case SYS_CMD_RF_CAD:
+        {
+            // Vysledek prijde asynchronne jako +CAD:FREE / +CAD:BUSY / +CAD:ERROR
+            dataQueue_t queueData;
+            queueData.cmd = CMD_RF_CAD_CHECK;
+            queueData.ptr = NULL;
+
+            if (!RT_SendDataToRFTask(&queueData, pdMS_TO_TICKS(100)))
+            {
+                AT_SendStringResponse("ERROR: Failed to send CAD command to RF task\r\n");
+                commandHandled = false;
+            }
+            break;
+        }
 
         case SYS_CMD_RF_TX_NVM_ONCE:
         {

@@ -160,6 +160,11 @@ typedef struct
 #define CMD_MAIN_RF_TX_DONE           248
 #define CMD_MAIN_RF_RADIO_ERROR       247   // Radio neinicializovano / nereaguje
 #define CMD_MAIN_RF_TX_BUSY           246   // LBT: paket zahozen, kanal obsazeny / TX zrusen
+#define CMD_MAIN_RF_CAD_RESULT        245   // AT+RF_CAD: vysledek v .data (CAD_RESULT_x)
+
+#define CAD_RESULT_FREE               0
+#define CAD_RESULT_BUSY               1
+#define CAD_RESULT_ERROR              2     // CAD_DONE neprisel / zrusen jinym prikazem / bezi LBT
 
 #define CMD_RF_TURN_ON			    254
 #define CMD_RF_TURN_OFF			    253
@@ -172,6 +177,7 @@ typedef struct
 #define CMD_RF_HB_REQUEST       246   // Heartbeat request from main task
 #define CMD_RF_TX_CW            245   // Start/Stop TX CW mode
 #define CMD_RF_LBT_RETRY        244   // LBT: vyprsel backoff / pojistka CAD
+#define CMD_RF_CAD_CHECK        243   // AT+RF_CAD: samostatny CAD bez vysilani
 
 
 

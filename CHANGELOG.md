@@ -6,7 +6,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/), versions follow
 ## [1.4.0] - 2026-11-07
 ### Added
 - `AT+RF_TX_LBT=<max_ms>,<force>,<HEX data>` - transmit after a CAD channel check. While the channel is busy the dongle stays in RX and retries after a random backoff, for at most `max_ms`. After that the packet is sent anyway (`force=1`) or discarded (`force=0`). New `AT+CAPS` token `TX_LBT`.
+- `AT+RF_CAD` - channel check only: one CAD with the TX settings, nothing is transmitted. Result arrives asynchronously as `+CAD:FREE`, `+CAD:BUSY` or `+CAD:ERROR`. New `AT+CAPS` token `CAD`.
 - `+TX:BUSY` asynchronous notification - an `AT+RF_TX_LBT` packet was discarded because the channel stayed busy, or the pending transmission was cancelled by another radio command.
+
+### Fixed
+- Commands documented without parameters (`AT+RF_GET_TSYM`, `AT+RF_CAD`) are accepted without `=`; before, `AT+RF_GET_TSYM` returned `ERROR - Missing parameters`.
 
 ## [1.3.0] - 2026-10-22
 ### Added

@@ -519,47 +519,15 @@ void ru_radio_start_rx(radio_context_t	*ctx)
 }
 
 
-/**
- * @brief 
- * 
- * @param ctx 
- */
-void ru_radio_start_CAD(radio_context_t	*ctx)
-{
-	ral_t* ral;
-	ralf_t* ralf;
-	ral_lora_cad_params_t cadPar;
-
-	ral_status_t ret=RAL_STATUS_OK;
-	ral = &ctx->rfConfig.ralf.ral;
-	ralf = &ctx->rfConfig.ralf;
-	ru_radioCleanAndStandby(RAL_STANDBY_CFG_RC, ctx);
-
-	ret += ralf_setup_lora(ralf, &ctx->rfConfig.loraParam_rx);
-	ret += ral_set_dio_irq_params(ral, RAL_IRQ_ALL);
-
-	cadPar.cad_det_min_in_symb = 10;
-	cadPar.cad_det_peak_in_symb = 23;
-	cadPar.cad_symb_nb = RAL_LORA_CAD_04_SYMB;
-	cadPar.cad_timeout_in_ms = 0;
-	cadPar.cad_exit_mode = RAL_LORA_CAD_ONLY;
-
-	ret += ral_set_lora_cad_params(ral, &cadPar);
-	ret += ral_set_lora_cad(ral);
-
-	if(ret != RAL_STATUS_OK) _exit(68431);
-
-	ctx->rfConfig.lastMode = RF_MODE_CAD;
-
-}
-
-
 /* ------------------------------------------------------------------------- */
 /* LBT - CAD pred vysilanim                                                  */
 /*                                                                           */
 /* CAD (parametry TX, CAD_ONLY) -> volno    -> TX                            */
 /*                              -> obsazeno -> RX + nahodny backoff -> CAD   */
 /*                                          -> deadline -> TX nebo +TX:BUSY  */
+/*                                                                           */
+/* Samostatny CAD (AT+RF_CAD) pouziva stejne parametry i pojistku,           */
+/* vysledek jen nahlasi (+CAD:FREE/BUSY/ERROR) a vrati radio do RX.          */
 /* ------------------------------------------------------------------------- */
 
 #define LBT_CAD_DET_MIN				10		// AN1200.48: pro vsechna SF
@@ -629,13 +597,17 @@ static uint32_t _lbt_random(void)
 /**
  * @brief Nacte TX konfiguraci a spocita delku CAD.
  *        Podle AN1200.48 trva CAD priblizne o 0.6-0.85 symbolu dele, nez je nastaveno.
+ *        Pri LBT se nahrava i delka paketu, samostatny CAD necha posledni hodnotu.
  */
 static const lbt_cad_cfg_t *_lbt_load_tx_config(radio_context_t *ctx)
 {
 	const lbt_cad_cfg_t *cfg;
 	ralf_params_lora_t *tx = &ctx->rfConfig.loraParam_tx;
 
-	tx->pkt_params.pld_len_in_bytes = ctx->lbt.pkt->size;
+	if (ctx->lbt.pkt != NULL)
+	{
+		tx->pkt_params.pld_len_in_bytes = ctx->lbt.pkt->size;
+	}
 	ru_load_radio_config_tx(tx);
 
 	cfg = _lbt_get_cad_cfg(tx->mod_params.sf, tx->mod_params.bw);
@@ -691,10 +663,12 @@ static void _lbt_transmit(radio_context_t *ctx)
 }
 
 /**
- * @brief Spusti CAD s parametry nasledneho TX. Stejny timer hlida i ztraceny CAD_DONE
- *        a chybu SPI, oboje skonci jako obsazeny kanal.
+ * @brief Spusti CAD s parametry TX. Stejny timer hlida i ztraceny CAD_DONE
+ *        a chybu SPI (LBT: obsazeny kanal, samostatny CAD: +CAD:ERROR).
+ *
+ * @param mode RF_MODE_LBT_CAD nebo RF_MODE_CAD (samostatny CAD)
  */
-static void _lbt_start_cad(radio_context_t *ctx)
+static void _lbt_start_cad(radio_context_t *ctx, radio_modes_e mode)
 {
 	ral_t *ral = &ctx->rfConfig.ralf.ral;
 	ralf_t *ralf = &ctx->rfConfig.ralf;
@@ -713,7 +687,7 @@ static void _lbt_start_cad(radio_context_t *ctx)
 	cadPar.cad_exit_mode = RAL_LORA_CAD_ONLY;
 	cadPar.cad_timeout_in_ms = 0;
 
-	ctx->rfConfig.lastMode = RF_MODE_LBT_CAD;
+	ctx->rfConfig.lastMode = mode;
 
 	ret += ralf_setup_lora(ralf, &ctx->rfConfig.loraParam_tx);
 	ret += ral_set_dio_irq_params(ral, RAL_IRQ_CAD_DONE | RAL_IRQ_CAD_OK);
@@ -722,7 +696,7 @@ static void _lbt_start_cad(radio_context_t *ctx)
 
 	if (ret != RAL_STATUS_OK)
 	{
-		LOG_INFO("LBT CAD start failed");
+		LOG_INFO("CAD start failed");
 	}
 
 	_lbt_arm_timer(ctx, 2u * ctx->lbt.tcad_ms + LBT_CAD_TIMEOUT_MARGIN_MS);
@@ -780,6 +754,69 @@ static void _lbt_on_busy(radio_context_t *ctx)
 	}
 }
 
+static void _cad_report(uint32_t result)
+{
+	dataQueue_t txm;
+
+	txm.cmd = CMD_MAIN_RF_CAD_RESULT;
+	txm.data = result;
+	txm.ptr = NULL;
+	MT_SendDataToMainTask(&txm, portMAX_DELAY);
+}
+
+/**
+ * @brief Ukonci samostatny CAD, nahlasi vysledek a vrati radio do RX.
+ */
+static void _cad_finish(radio_context_t *ctx, uint32_t result)
+{
+	xTimerStop(ctx->timers.rfLbtTimer.timer, pdMS_TO_TICKS(100));
+	ctx->lbt.cad_only = false;
+
+	_cad_report(result);
+	ru_radio_start_rx(ctx);
+}
+
+/**
+ * @brief Samostatny CAD (AT+RF_CAD) s TX parametry, nic nevysila.
+ *        Vysledek prijde jako CMD_MAIN_RF_CAD_RESULT.
+ *
+ * @param ctx
+ */
+void ru_radio_cad_check(radio_context_t *ctx)
+{
+	if (ctx->lbt.pkt != NULL)
+	{
+		_cad_report(CAD_RESULT_ERROR);	// radio prave dela LBT
+		return;
+	}
+
+	if (ctx->rfConfig.lastMode == RF_MODE_TX)
+	{
+		_cad_report(CAD_RESULT_BUSY);	// kanal obsazuje nase vlastni vysilani (TX/CW)
+		return;
+	}
+
+	// Pripadny predchozi samostatny CAD se restartuje, vysledek prijde jen jednou
+	ctx->lbt.cad_only = true;
+	_lbt_start_cad(ctx, RF_MODE_CAD);
+}
+
+/**
+ * @brief Jiny prikaz prebira radio, cekajici samostatny CAD skonci s +CAD:ERROR.
+ *        Na radio nesaha.
+ */
+static void _cad_abort(radio_context_t *ctx)
+{
+	if (ctx->lbt.cad_only == false)
+	{
+		return;
+	}
+
+	xTimerStop(ctx->timers.rfLbtTimer.timer, pdMS_TO_TICKS(100));
+	ctx->lbt.cad_only = false;
+	_cad_report(CAD_RESULT_ERROR);
+}
+
 static void _lbt_attempt(radio_context_t *ctx)
 {
 	// Vlastni probihajici vysilani bereme jako obsazeny kanal
@@ -789,7 +826,7 @@ static void _lbt_attempt(radio_context_t *ctx)
 	}
 	else
 	{
-		_lbt_start_cad(ctx);
+		_lbt_start_cad(ctx, RF_MODE_LBT_CAD);
 	}
 }
 
@@ -827,6 +864,12 @@ void ru_radio_send_packet_lbt(packet_info_t *pkt, uint32_t max_delay_ms, bool tx
  */
 void ru_radio_lbt_timer_event(radio_context_t *ctx)
 {
+	if (ctx->lbt.cad_only)
+	{
+		_cad_finish(ctx, CAD_RESULT_ERROR);	// CAD_DONE neprisel
+		return;
+	}
+
 	if (ctx->lbt.pkt == NULL)
 	{
 		return;		// zpozdena zprava, LBT uz skoncilo
@@ -884,6 +927,11 @@ void ru_radio_process_commands(RFCommands_e cmd,radio_context_t *ctx, const data
 	ral = &ctx->rfConfig.ralf.ral;
 	ralf = &ctx->rfConfig.ralf;
 	packet_info_t *pkt;
+
+	if (cmd != RADIO_CMD_START_CAD)
+	{
+		_cad_abort(ctx);
+	}
 
 	switch (cmd)
 	{
@@ -947,8 +995,7 @@ void ru_radio_process_commands(RFCommands_e cmd,radio_context_t *ctx, const data
 			break;
 
 		case RADIO_CMD_START_CAD:
-
-
+			ru_radio_cad_check(ctx);
 			break;
 
 		default:
@@ -997,7 +1044,7 @@ void ru_radio_process_IRQ(radio_context_t *ctx)
 					}
 					else
 					{
-						_exit(3515321352);
+						_exit(351532135);	// puvodni 3515321352 se nevesel do int
 					}
 					
 					LOG_INFO("RX: %d B, RSSI: %d dBm, SNR: %d dB", rxSize, (int16_t)RSSI, (int16_t)SNR);
@@ -1052,16 +1099,19 @@ void ru_radio_process_IRQ(radio_context_t *ctx)
 			break;
 
 		case RF_MODE_CAD:
-			if(irqSet & RAL_IRQ_CAD_DONE )
+			if ((irqSet & RAL_IRQ_CAD_DONE) == 0)
 			{
-				ru_radioCleanAndStandby(RAL_STANDBY_CFG_XOSC, ctx);
-				if(irqSet & RAL_IRQ_CAD_OK )
-				{
-					ru_radio_start_rx(ctx);
-					break;
-				}
+				break;	// opozdene IRQ z predchoziho RX, CAD jeste bezi
 			}
-			ru_radioCleanAndStandby(RAL_STANDBY_CFG_XOSC, ctx);
+
+			if (ctx->lbt.cad_only)
+			{
+				_cad_finish(ctx, (irqSet & RAL_IRQ_CAD_OK) ? CAD_RESULT_BUSY : CAD_RESULT_FREE);
+			}
+			else
+			{
+				ru_radio_start_rx(ctx);	// CAD zrusen jinym prikazem
+			}
 			break;
 
 		case RF_MODE_LBT_CAD:

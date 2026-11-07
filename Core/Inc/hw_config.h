@@ -80,6 +80,13 @@
 #endif
 #endif
 
+/* Board headers override the CubeMX pin defines from main.h (#undef + #define),
+ * so main.h must always be processed first. When hw_config.h is included before
+ * main.h (e.g. RF_Config.h -> sx126x_hal.h), main.h would otherwise redefine
+ * the pins back to the CubeMX values afterwards. If main.h is already being
+ * processed (it includes this file), its include guard makes this a no-op. */
+#include "main.h"
+
 /* Include board-specific pin definitions */
 #if defined(HW_BOARD_REV_0_0)
     #include "hw_boards/hw_board_v0_0.h"

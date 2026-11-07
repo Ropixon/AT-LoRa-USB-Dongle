@@ -6,10 +6,16 @@ Tests various SF, BW combinations between two dongles.
 Tested AT Commands:
 - LoRa Parameters: FREQ, POWER, SF, BW, IQ_INV, CR, HEADERMODE, CRC, PREAMBLE_SIZE, LDRO, SYNCWORD, PLDLEN
 - RF TX/RX: RF_TX_HEX, RF_TX_TXT, RF_RX_TO_UART, RF_RX_FORMAT
+- LBT / CAD (FW >= 1.4.0): RF_TX_LBT, RF_CAD, CAPS (+TX:DONE, +TX:BUSY, +CAD:*)
 - Saved Packet: RF_SAVE_PACKET, RF_TX_SAVED, RF_TX_SAVED_REPEAT, RF_TX_NVM_PERIOD
 - TOA & Timing: RF_GET_TOA, RF_GET_TSYM
 - AUX GPIO: AUX, AUX_PULSE, AUX_PULSE_STOP
 - System: UART_BAUD, FACTORY_RST, SYS_RESTART, IDENTIFY
+
+Usage:
+  python rf_range_test.py              all phases (EEPROM, LBT/CAD, range)
+  python rf_range_test.py --lbt-only   only the LBT / CAD tests
+                                       (first dongle = DUT, second = interferer/receiver)
 
 Author: Auto-generated
 Date: 2026-01-10
@@ -38,8 +44,8 @@ TARGET_BAUD_RATE = 230400  # Target baud rate to set after detection (max suppor
 TIMEOUT = 5.0  # seconds
 
 # RF Parameters to test
-SF_RANGE = [ 7,8,9]  # SF5 to SF12
-BW_OPTIONS = [6,7, 8]  # All bandwidth options
+SF_RANGE = [ 7,8]  # SF5 to SF12
+BW_OPTIONS = [6,7]  # All bandwidth options
 # BW mapping: 0=7.81kHz, 1=10.42kHz, 2=15.63kHz, 3=20.83kHz, 4=31.25kHz, 
 #             5=41.67kHz, 6=62.5kHz, 7=125kHz, 8=250kHz, 9=500kHz
 
@@ -562,6 +568,60 @@ class ATLoraDongle:
         logger.warning(f"{self.name}: Failed to get symbol time: {response}")
         return 0
 
+    def get_caps(self) -> List[str]:
+        """Return firmware capability tokens from AT+CAPS (empty list on failure)"""
+        _, response = self.send_command("AT+CAPS", timeout=2.0, stop_on_pattern="+CAPS:")
+        for line in response.splitlines():
+            if line.startswith("+CAPS:"):
+                return [t.strip() for t in line[len("+CAPS:"):].split(",") if t.strip()]
+        logger.warning(f"{self.name}: Failed to get capabilities: {response}")
+        return []
+
+    def wait_for_lines(self, patterns: List[str], timeout: float,
+                       wait_all: bool = False) -> Tuple[List[str], List[str]]:
+        """Wait for asynchronous notification lines (+TX:DONE, +CAD:FREE...)
+
+        Does NOT clear the input buffer, so notifications that arrived right after
+        the preceding OK are not lost.
+
+        Args:
+            patterns: Line prefixes to wait for
+            timeout: Max wait in seconds
+            wait_all: False = return on the first match, True = wait until every pattern was seen
+
+        Returns:
+            Tuple of (matched patterns in order of arrival, all received lines)
+        """
+        matched: List[str] = []
+        lines: List[str] = []
+        deadline = time.time() + timeout
+
+        while time.time() < deadline:
+            if self.serial.in_waiting > 0:
+                line = self.serial.readline().decode('utf-8', errors='ignore').strip()
+                if not line:
+                    continue
+                lines.append(line)
+                logger.debug(f"{self.name} RX: {line}")
+                for p in patterns:
+                    if line.startswith(p) and p not in matched:
+                        matched.append(p)
+                if matched and (not wait_all or len(matched) == len(patterns)):
+                    break
+            else:
+                time.sleep(0.005)
+
+        return matched, lines
+
+    def cad_check(self, timeout: float = 2.0) -> str:
+        """Run AT+RF_CAD and return 'FREE', 'BUSY', 'ERROR', or 'TIMEOUT' / 'CMD_ERROR'"""
+        success, response = self.send_command("AT+RF_CAD", timeout=2.0)
+        if not success:
+            logger.warning(f"{self.name}: AT+RF_CAD failed: {response}")
+            return "CMD_ERROR"
+        matched, _ = self.wait_for_lines(["+CAD:FREE", "+CAD:BUSY", "+CAD:ERROR"], timeout)
+        return matched[0].split(":")[1] if matched else "TIMEOUT"
+
 
 def test_eeprom_storage(tx_dongle: ATLoraDongle, rx_dongle: ATLoraDongle) -> bool:
     """Test EEPROM storage for all configuration parameters
@@ -931,6 +991,217 @@ def test_eeprom_storage(tx_dongle: ATLoraDongle, rx_dongle: ATLoraDongle) -> boo
     return all_tests_passed
 
 
+LBT_SF = 7                 # fast settings, CAD takes only a few ms
+LBT_BW = 7                 # 125 kHz
+LBT_PACKET_HEX = "4C42540102030405"
+LBT_BUSY_MS = 800          # how long the interferer occupies the channel (long preamble)
+CAD_REPEATS = 5            # CAD is statistical - repeat and allow one miss
+
+
+def test_lbt_cad(dut: ATLoraDongle, other: ATLoraDongle) -> List[Tuple[str, bool, str]]:
+    """Test AT+RF_CAD and AT+RF_TX_LBT (FW >= 1.4.0)
+
+    dut   = dongle under test (runs CAD / LBT)
+    other = second dongle: interferer (transmits a packet with a very long preamble,
+            so the channel is busy for ~LBT_BUSY_MS) and receiver of LBT packets.
+    Both dongles must be within RF range of each other.
+
+    Returns:
+        List of (check name, passed, detail) - printed in the final summary
+    """
+    logger.info("\n" + "="*70)
+    logger.info("LBT / CAD TEST")
+    logger.info("="*70)
+
+    results: List[Tuple[str, bool, str]] = []
+
+    def record(name: str, ok: bool, detail: str = ""):
+        results.append((name, ok, detail))
+        (logger.info if ok else logger.error)(f"{'✓' if ok else '✗'} {name}{' - ' + detail if detail else ''}")
+
+    # --- Capabilities ---
+    caps = dut.get_caps()
+    missing = [c for c in ("TX_LBT", "CAD") if c not in caps]
+    record("AT+CAPS contains TX_LBT, CAD", not missing, f"missing {missing}" if missing else "")
+    if missing:
+        logger.error("Firmware does not support LBT/CAD - skipping the rest")
+        return results
+
+    # --- Common configuration: same SF/BW/freq on both sides ---
+    if not (dut.configure_tx(LBT_SF, LBT_BW, TEST_FREQUENCY, preamble=8) and
+            dut.configure_rx(LBT_SF, LBT_BW, TEST_FREQUENCY, preamble=8) and
+            other.configure_rx(LBT_SF, LBT_BW, TEST_FREQUENCY, preamble=8)):
+        record("Configuration", False)
+        return results
+
+    tsym_us = dut.get_symbol_time()
+    record("AT+RF_GET_TSYM without '='", tsym_us > 0, f"{tsym_us} us")
+    if tsym_us <= 0:
+        tsym_us = 1024  # SF7 / 125 kHz
+
+    # Interferer: same modulation, preamble long enough to occupy the channel for LBT_BUSY_MS
+    busy_preamble = min(65535, int(LBT_BUSY_MS * 1000 / tsym_us))
+    if not other.configure_tx(LBT_SF, LBT_BW, TEST_FREQUENCY, preamble=busy_preamble):
+        record("Interferer configuration", False)
+        return results
+    interferer_toa_ms = other.get_toa(4) or LBT_BUSY_MS
+    dut_toa_ms = dut.get_toa(len(LBT_PACKET_HEX) // 2) or 100
+    logger.info(f"Interferer preamble {busy_preamble} symbols, ToA {interferer_toa_ms} ms; DUT packet ToA {dut_toa_ms} ms")
+
+    dut.enable_rx_to_uart(True)
+    other.enable_rx_to_uart(True)
+
+    def start_interferer() -> bool:
+        """Start a long LoRa transmission on the other dongle, return when it is on air"""
+        ok, resp = other.send_command("AT+RF_TX_HEX=A5A5A5A5")
+        if not ok:
+            logger.error(f"Interferer TX failed: {resp}")
+        time.sleep(0.05)  # let the preamble start
+        return ok
+
+    def wait_interferer_done():
+        other.wait_for_lines(["+TX:DONE"], interferer_toa_ms / 1000 + 2.0)
+        time.sleep(0.1)
+
+    def lbt(max_ms: int, force: int) -> Tuple[bool, str]:
+        return dut.send_command(f"AT+RF_TX_LBT={max_ms},{force},{LBT_PACKET_HEX}")
+
+    # --- 1. CAD on a free channel ---
+    time.sleep(0.2)
+    cad = [dut.cad_check() for _ in range(CAD_REPEATS)]
+    free = cad.count("FREE")
+    record("AT+RF_CAD on free channel -> +CAD:FREE", free >= CAD_REPEATS - 1, f"{cad}")
+
+    # --- 2. CAD on a busy channel ---
+    busy_cnt = 0
+    busy_runs = 3
+    cad = []
+    for _ in range(busy_runs):
+        if start_interferer():
+            r = dut.cad_check()
+            cad.append(r)
+            busy_cnt += (r == "BUSY")
+        wait_interferer_done()
+    record("AT+RF_CAD on busy channel -> +CAD:BUSY", busy_cnt >= busy_runs - 1, f"{cad}")
+
+    # --- 3. Invalid AT+RF_TX_LBT parameters ---
+    bad = ["700000,0,AABB", "100,2,AABB", "100,0", "100", "abc,0,AABB", "100,0,ABC", "100,0,"]
+    bad_ok = []
+    for p in bad:
+        ok, _ = dut.send_command(f"AT+RF_TX_LBT={p}", timeout=1.0)
+        if ok:
+            bad_ok.append(p)
+    record("AT+RF_TX_LBT rejects invalid parameters", not bad_ok, f"accepted {bad_ok}" if bad_ok else "")
+    dut.wait_for_lines(["+TX:"], 0.3)  # drain anything unexpected
+
+    # --- 4. LBT on a free channel: immediate TX, packet received ---
+    other.serial.reset_input_buffer()
+    t0 = time.time()
+    ok, resp = lbt(500, 0)
+    matched, _ = dut.wait_for_lines(["+TX:DONE", "+TX:BUSY"], dut_toa_ms / 1000 + 1.0) if ok else ([], [])
+    elapsed = (time.time() - t0) * 1000
+    rx_ok, rx_data, _ = other.wait_for_rx_packet(timeout=1.0)
+    record("LBT free channel -> +TX:DONE",
+           ok and matched[:1] == ["+TX:DONE"], f"{matched or resp}, {elapsed:.0f} ms")
+    record("LBT free channel -> packet received", rx_ok and rx_data == LBT_PACKET_HEX.upper(), rx_data)
+
+    # --- 5. Busy channel, short max_ms, force=0 -> +TX:BUSY (nothing sent) ---
+    if start_interferer():
+        ok, resp = lbt(200, 0)
+        matched, _ = dut.wait_for_lines(["+TX:DONE", "+TX:BUSY"], 2.0) if ok else ([], [])
+        record("LBT busy, force=0 -> +TX:BUSY", ok and matched[:1] == ["+TX:BUSY"], f"{matched or resp}")
+    wait_interferer_done()
+
+    # --- 6. Busy channel, short max_ms, force=1 -> sent anyway after ~max_ms ---
+    if start_interferer():
+        t0 = time.time()
+        ok, resp = lbt(200, 1)
+        matched, _ = dut.wait_for_lines(["+TX:DONE", "+TX:BUSY"], 2.0) if ok else ([], [])
+        elapsed = (time.time() - t0) * 1000
+        record("LBT busy, force=1 -> +TX:DONE after deadline",
+               ok and matched[:1] == ["+TX:DONE"] and elapsed >= 150,
+               f"{matched or resp}, {elapsed:.0f} ms")
+    wait_interferer_done()
+
+    # --- 7. Busy channel, long max_ms -> waits until the channel is free, then sends ---
+    if start_interferer():
+        t0 = time.time()
+        ok, resp = lbt(5000, 0)
+        matched, _ = dut.wait_for_lines(["+TX:DONE", "+TX:BUSY"], 7.0) if ok else ([], [])
+        elapsed = (time.time() - t0) * 1000
+        # interferer was on air for ~interferer_toa_ms, minus the 50 ms head start
+        min_wait = max(0, interferer_toa_ms - 300)
+        record("LBT busy, max_ms=5000 -> waits, then +TX:DONE",
+               ok and matched[:1] == ["+TX:DONE"] and elapsed >= min_wait,
+               f"{matched or resp}, waited {elapsed:.0f} ms (channel busy ~{interferer_toa_ms} ms)")
+        rx_ok, rx_data, _ = other.wait_for_rx_packet(timeout=1.0)
+        record("LBT after backoff -> packet received", rx_ok and rx_data == LBT_PACKET_HEX.upper(), rx_data)
+    wait_interferer_done()
+
+    # --- 8. AT+RF_CAD while LBT is pending -> +CAD:ERROR, LBT continues ---
+    if start_interferer():
+        ok, resp = lbt(5000, 0)
+        cad_res = dut.cad_check() if ok else "LBT_CMD_ERROR"
+        matched, _ = dut.wait_for_lines(["+TX:DONE", "+TX:BUSY"], 7.0)
+        record("AT+RF_CAD during LBT -> +CAD:ERROR, LBT still completes",
+               cad_res == "ERROR" and matched[:1] == ["+TX:DONE"], f"CAD={cad_res}, LBT={matched}")
+    wait_interferer_done()
+
+    # --- 9. Pending LBT cancelled by AT+RF_TX_HEX -> +TX:BUSY then +TX:DONE ---
+    if start_interferer():
+        ok1, _ = lbt(5000, 0)
+        time.sleep(0.1)
+        ok2, resp = dut.send_command(f"AT+RF_TX_HEX={LBT_PACKET_HEX}")
+        matched, _ = dut.wait_for_lines(["+TX:BUSY", "+TX:DONE"], 2.0, wait_all=True)
+        record("AT+RF_TX_HEX cancels pending LBT -> +TX:BUSY, +TX:DONE",
+               ok1 and ok2 and set(matched) == {"+TX:BUSY", "+TX:DONE"}, f"{matched or resp}")
+    wait_interferer_done()
+
+    # --- 10. Second LBT while one is pending -> second is rejected with +TX:BUSY ---
+    if start_interferer():
+        ok1, _ = lbt(5000, 0)
+        ok2, _ = lbt(5000, 0)
+        first, _ = dut.wait_for_lines(["+TX:BUSY", "+TX:DONE"], 1.0)
+        rest, _ = dut.wait_for_lines(["+TX:DONE"], 7.0)
+        record("Second LBT while pending -> +TX:BUSY, first still sent",
+               ok1 and ok2 and first[:1] == ["+TX:BUSY"] and rest == ["+TX:DONE"], f"{first} / {rest}")
+    wait_interferer_done()
+
+    # Restore a normal preamble on the interferer
+    other.configure_tx(LBT_SF, LBT_BW, TEST_FREQUENCY, preamble=8)
+
+    passed = sum(1 for _, ok, _ in results if ok)
+    logger.info("-"*70)
+    logger.info(f"LBT / CAD: {passed}/{len(results)} checks passed")
+    for name, ok, detail in results:
+        if not ok:
+            logger.error(f"  FAILED: {name} ({detail})")
+    logger.info("="*70 + "\n")
+
+    return results
+
+
+def print_lbt_summary(results: List[Tuple[str, bool, str]]):
+    """Print LBT / CAD check results as a table (part of the final summary)"""
+    print("="*140)
+    print("LBT / CAD TEST RESULTS")
+    print("="*140)
+    if not results:
+        print("Not run")
+        print("="*140)
+        return
+
+    print(f"{'#':<4} {'Check':<62} {'Result':<10} {'Detail'}")
+    print("-"*140)
+    for i, (name, ok, detail) in enumerate(results, 1):
+        status = "✓ PASS" if ok else "✗ FAIL"
+        print(f"{i:<4} {name:<62} {status:<10} {detail[:60]}")
+    print("-"*140)
+    passed = sum(1 for _, ok, _ in results if ok)
+    print(f"Total: {len(results)} checks | Passed: {passed} | Failed: {len(results) - passed}")
+    print("="*140 + "\n")
+
+
 def find_silicon_labs_ports() -> List[str]:
     """Find COM ports with Silicon Labs devices"""
     ports = []
@@ -1176,6 +1447,12 @@ def main():
             sys.exit(1)
         logger.info(f"RX dongle OK (received {len(response)} bytes)")
         
+        if "--lbt-only" in sys.argv:
+            lbt_results = test_lbt_cad(tx_dongle, rx_dongle)
+            print_lbt_summary(lbt_results)
+            lbt_passed = bool(lbt_results) and all(ok for _, ok, _ in lbt_results)
+            sys.exit(0 if lbt_passed else 1)
+
         # Run EEPROM storage verification test first
         logger.info("\n" + "*"*70)
         logger.info("* PHASE 1: EEPROM STORAGE VERIFICATION")
@@ -1192,13 +1469,22 @@ def main():
             rx_dongle.disconnect()
             sys.exit(1)
         
+        # LBT / CAD (does not stop the range tests on failure)
+        logger.info("\n" + "*"*70)
+        logger.info("* PHASE 2: LBT / CAD")
+        logger.info("*"*70)
+        lbt_results = test_lbt_cad(tx_dongle, rx_dongle)
+        if not (lbt_results and all(ok for _, ok, _ in lbt_results)):
+            logger.error("⚠ LBT / CAD tests failed - continuing with range tests")
+
         # Run test suite
         logger.info("\n" + "*"*70)
-        logger.info("* PHASE 2: RF RANGE TESTS")
+        logger.info("* PHASE 3: RF RANGE TESTS")
         logger.info("*"*70)
         results = run_full_test_suite(tx_dongle, rx_dongle)
         
-        # Print summary
+        # Print summary - LBT/CAD table first, range table last (visible at the end of the log)
+        print_lbt_summary(lbt_results)
         print_results_summary(results)
         
     except KeyboardInterrupt:

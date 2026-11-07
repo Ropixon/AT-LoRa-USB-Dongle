@@ -57,6 +57,7 @@ typedef struct
 	TickType_t		deadline;		//nejzazsi cas startu TX
 	uint32_t		tcad_ms;		//odhad delky jednoho CAD
 	bool			tx_on_timeout;	//po deadlinu odeslat i do obsazeneho kanalu
+	bool			cad_only;		//bezi samostatny CAD (AT+RF_CAD), ceka se na vysledek
 }lbt_ctx_t;
 
 /*
