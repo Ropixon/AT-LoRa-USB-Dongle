@@ -1,127 +1,489 @@
-# Ropixon AT LoRa USB Dongle
+# Ropixon AT LoRa Dongle - User Manual
 
-<table>
-<tr>
-<td>
-<p><strong>Send, receive and inspect raw LoRa packets from your computer.</strong></p>
-<p>Plug in the SX1262 dongle and open a serial terminal. Send text or hex with an AT command. On receive, see the packet data, RSSI and SNR together.</p>
-<p><strong>Send</strong> <code>AT+RF_TX_TXT=Hello</code><br>
-<strong>Receive</strong> <code>+RX:5,48656C6C6F,RSSI:-45,SNR:9</code></p>
-<p><strong><a href="https://www.tindie.com/products/nn_6394/at-lora-usb-dongle/">Buy on Tindie</a></strong> · <a href="#quick-start">Quick start</a> · <a href="#build-with-ai">Build with AI</a> · <a href="AT_LORA_DONGLE_MANUAL_EN.md">AT command manual</a></p>
-</td>
-<td align="center">
-<img src="HW_image.png" alt="Ropixon SX1262 LoRa dongle with USB-A connector and AUX pin headers" width="265">
-</td>
-</tr>
-</table>
+**Ropixon AT-USB LoRa Dongle** enables sending and receiving all **LoRa** packets! Just configure it properly using intuitive **AT commands** via serial line. 
 
-## What you can do with it
+- No programming required.
+- It's suitable for rapid development, testing, or creating your own wireless LoRa link.
 
-| Use case | What the dongle does | Try this |
-| --- | --- | --- |
-| **Debug a LoRa node** | View raw payloads with per-packet RSSI and SNR. Send your own ASCII or hex test packets. | `AT+RF_RX_FORMAT=HEX` · `AT+RF_TX_HEX=48656C6C6F` |
-| **Build a point-to-point link** | Configure TX and RX separately, including frequency, spreading factor, bandwidth and sync word. | `AT+LR_TX_SET` · `AT+LR_RX_SET` |
-| **Compare antennas or test range** | Repeat a saved packet from one end and compare packet reception, RSSI and SNR at the other end. | `AT+RF_TX_SAVED_REPEAT=ON` |
-| **Check the channel before sending** | Use LoRa channel activity detection (CAD) on the selected TX profile, or let the dongle wait for the channel to clear before transmitting. | `AT+RF_CAD` · `AT+RF_TX_LBT=500,0,48656C6C6F` |
-| **Run RF bench tests** | Generate a continuous carrier for lab measurements or calculate the airtime for a packet. | `AT+RF_TX_CW` · `AT+RF_GET_TOA=5` |
-| **Control test signals** | Set eight AUX outputs or generate PWM. Pins 7 and 8 use hardware PWM. | `AT+AUX=1,1` · `AT+AUX_PULSE=7,1000,50` |
-| **Automate a test or build an app** | Use USB serial from Python. Read packet events and wait for the radio to finish transmitting. | `AT+CAPS` · `+TX:DONE` · [Python example](examples/send_packet.py) |
+## What is it for?
 
-Firmware 1.3.0 added SNR in received packet reports. Firmware 1.4.0 added CAD and listen before talk. Use `AT+IDENTIFY` to check the firmware and `AT+CAPS` to check supported features.
+AT LoRa Dongle is suitable for:
 
-## Build with AI
+- **Testing and development** of LoRa applications
+- **Point-to-Point communication** over long distances
+- **Range tests** - measuring capable of LoRa connection distance
+- **Sensor networks** - collecting data from remote sensors
+- **RF testing** - testing RF parameters, CW transmission
+- **Scanning** - capturing random packets transmitted over the air
 
-Give [the AT command manual](https://github.com/Ropixon/AT-LoRa-USB-Dongle/blob/master/AT_LORA_DONGLE_MANUAL_EN.md) to ChatGPT, Claude or Copilot. Start with the prompt below to generate a Python tool for sending packets and logging their signal quality. You can also ask for a desktop serial monitor, a CSV logger or a range-test tool for two dongles.
+## Overview
 
-> **Prompt to copy**
->
-> Using the attached Ropixon AT LoRa USB Dongle manual, write a Python 3 tool with pyserial. Let me choose the serial port and baud rate. Use 230400 baud, 8N1, no flow control and CR+LF by default. Check the device with `AT+IDENTIFY` and read `AT+CAPS` before enabling any features that depend on firmware support. Keep the current RF settings. Enable serial packet output with `AT+RF_RX_TO_UART=1` and set `AT+RF_RX_FORMAT=HEX` in listen mode.
->
-> Make the default mode listen for HEX packets and log timestamps, payload, RSSI and SNR when present. Add an option to send one hex packet with `AT+RF_TX_HEX`. Report transmit completion on `+TX:DONE` and show command errors and timeouts. Include the install and run commands for Windows and use only AT commands documented in the manual.
+When sending packets, no additional "wrapping" or encryption of data is used - you always send RAW (hex or ASCII) data. The same applies to reception.
 
-A working starting point for the transmit side is already in the repo. From the repository folder, use the following commands with an idle dongle and replace `COM3` with its serial port.
+Additional functions:
+AT LoRa dongle has 8 aux pins - you can set its logical level or activate PWM on it - just through the AT commands.
 
-```powershell
-python -m pip install pyserial
-python examples/send_packet.py COM3
+![AT LoRa Dongle Hardware](HW_image.png)
+*AT LoRa Dongle - hardware overview*
+
+**For quick start:**
+
+**Ready-to-use device available on [Tindie](https://www.tindie.com/products/nn_6394/at-lora-usb-dongle/).**
+
+**1)** Install driver for serial interface CP2102 according to your system: [Download drivers](https://www.silabs.com/interface/usb-bridges/classic/device.cp2102?tab=softwareandtools)
+ 
+**2)** Connect **AT dongle** to USB and set desired LoRa parameter configuration (or leave defaults)
+
+**3)** Send your first LoRa packet via AT commands:
+
+  - Send data in ASCII: ```AT+RF_TX_TXT=Hello, this is AT LoRa dongle Ropixon!```
+  - Send data in HEX: ```AT+RF_TX_HEX=48656C6C6F2C2074686973206973204154204C6F526120646F6E676C6520526F7069786F6E21```
+
+**4)** Reception is activated automatically - output format HEX/ASCII can be selected using `AT+RF_RX_FORMAT=HEX|ASCII, ?`
+
+**Status LEDs**
+
+The dongle has 3 LEDs serving these functions:
+
+| LED | Function |
+|-----|----------|
+| 🔴 RED | Reception of new AT commands |
+| 🟢 GREEN | System LED - indicates proper operation |
+| 🔵 BLUE | Reception or transmission of LoRa data |
+
+
+**Aux pins**
+
+The **AT dongle** has 8 aux pins that can be "manually" controlled or run PWM modulation: `AT+AUX_PULSE=<pin:1-8>,<freq_hz>,<duty%:0-100>`. Pins 7-8 use a hardware PWM timer (up to 320 kHz); pins 1-6 use a software timer (up to 500 Hz).
+
+### Main Features
+
+| Feature | Specification |
+|---------|---------------|
+| **RF LoRa Chip** | SX1262 LoRa transceiver from Semtech ([Datasheet](https://www.semtech.com/products/wireless-rf/lora-connect/sx1262)) |
+| **Interface** | USB (Virtual COM port) |
+| **Control** | AT commands via serial line |
+| **Baud rates** | 9600, 19200, 38400, 57600, 115200, **230400** (default) |
+| **Frequency** | 150 MHz - 960 MHz (optimized for 868 MHz band) |
+| **TX power** | 0 to +22 dBm |
+| **Spreading Factor** | SF5 to SF12 |
+| **Bandwidths** | 7.81 kHz to 500 kHz |
+
+> **Note:** RF path is optimized for 868 MHz band (EU: 863-870 MHz, USA: 915 MHz). The further from the operating band, the less power can be transmitted/received.
+
+
+### AUX Pins
+
+The dongle has 8 auxiliary pins that can be manually controlled or run PWM modulation:
+
+```
+AT+AUX_PULSE=<pin:1-8>,<freq_hz>,<duty%:0-100>
 ```
 
-## Quick start
+Pins 7-8 (aux7/aux8) are driven by a dedicated hardware PWM timer and support frequencies from 1 Hz up to 320 kHz. Pins 1-6 are driven by a FreeRTOS software timer, limited to 1-500 Hz; requested duty cycles are rounded to the nearest value representable in whole RTOS ticks (a `WARN: duty rounded to X%` response is sent when rounding occurs).
 
-1. Plug the dongle into USB-A. If a serial port does not appear, install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers).
-2. Open the serial port at **230400 baud, 8N1, no flow control**, with **CR+LF** line endings. Send `AT+IDENTIFY` to see the firmware and board variant.
-3. For a two-dongle test, replace `FREQUENCY_HZ` below with the same permitted frequency in Hz for both dongles and their hardware band. The examples set both profiles explicitly so they also work when the dongles had different settings before the test.
+---
 
-**On the receiving dongle**
+## Quick Start
 
-```text
-AT+LR_RX_SET=SF:7,BW:7,CR:45,Freq:FREQUENCY_HZ,IQInv:0,HeaderMode:0,CRC:1,Preamble:8,LDRO:2
-AT+LR_RX_SYNCWORD=12
-AT+RF_RX_TO_UART=1
-AT+RF_RX_FORMAT=HEX
+**1.** Install driver according to your system: [Download drivers](https://www.silabs.com/interface/usb-bridges/classic/device.cp2102?tab=softwareandtools)
+
+**2.** Connect **AT dongle** to USB and set desired LoRa parameter configuration (or leave defaults)
+
+**3.** Send data via AT commands:
+   - ASCII: `AT+RF_TX_TXT=Hello, this is AT LoRa dongle Ropixon!`
+   - HEX: `AT+RF_TX_HEX=48656C6C6F2C2074686973206973204154204C6F526120646F6E676C6520526F7069786F6E21`
+
+**4.** Reception is activated automatically - output format can be selected using `AT+RF_RX_FORMAT=HEX` or `AT+RF_RX_FORMAT=ASCII`
+
+---
+
+## Use Cases
+
+- **Testing and development** of LoRa applications
+- **Point-to-Point communication** over long distances
+- **Range tests** - measuring LoRa connection range
+- **Sensor networks** - collecting data from remote sensors
+- **RF testing** - testing RF parameters, CW transmission
+- **Scanning** - capturing packets transmitted over the air
+
+---
+
+## Serial Connection
+
+| Parameter | Value |
+|-----------|-------|
+| Baud rate | 230400 (default) |
+| Data bits | 8 |
+| Parity | None |
+| Stop bits | 1 |
+| Flow control | None |
+| Line ending | CR+LF (`\r\n`) |
+
+### Communication Test
+
+Send `AT` or `AT+HELP` - dongle will respond with a list of all available commands.
+
+Send `AT+IDENTIFY` - dongle will respond with device identification:
+```
+Ropixon AT-USB LoRa Dongle, FW: v1.1.0, HW: <freq_band> <osc_type> v1.0, Build: <date> <time>, UID: xxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-**On the transmitting dongle**
+---
 
-```text
-AT+LR_TX_SET=SF:7,BW:7,CR:45,Freq:FREQUENCY_HZ,IQInv:0,HeaderMode:0,CRC:1,Preamble:8,LDRO:2,Power:0
-AT+LR_TX_SYNCWORD=12
-AT+RF_TX_TXT=Hello
+## AT Commands Reference
+
+### System Commands
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `AT` | Print help | `AT` |
+| `AT+HELP` | Display all available commands | `AT+HELP` |
+| `AT+IDENTIFY` | Return unique device ID | `AT+IDENTIFY` |
+| `AT+CAPS` | List firmware capabilities | `AT+CAPS` |
+| `AT+FACTORY_RST` | Reset to factory defaults and restart | `AT+FACTORY_RST` |
+| `AT+SYS_RESTART` | System restart | `AT+SYS_RESTART` |
+| `AT+UART_BAUD` | Set/query baud rate (restarts on change) | `AT+UART_BAUD=230400` |
+
+**Capabilities (`AT+CAPS`)** - one line, comma-separated tokens, no spaces, no trailing `OK`:
+```
++CAPS:HOST_V1,TX_DONE,RX_TO_UART,RX_FORMAT,RX_SNR,RADIO_ERR,TX_SAVED,TX_CW,TX_LBT,CAD,TOA,AUX,AUX_PWM_HW,UART_BAUD
+```
+`HOST_V1` is always present and marks support of host protocol v1 (required by the Python host driver). Host applications should search for individual tokens rather than compare the whole line.
+
+### LoRa TX Parameters
+
+| Command | Description | Values | Example |
+|---------|-------------|--------|---------|
+| `AT+LR_TX_FREQ` | TX frequency in Hz | 150-960 MHz | `AT+LR_TX_FREQ=869525000` |
+| `AT+LR_TX_POWER` | TX power | 0 to +22 dBm | `AT+LR_TX_POWER=14` |
+| `AT+LR_TX_SF` | Spreading Factor | 5-12 | `AT+LR_TX_SF=7` |
+| `AT+LR_TX_BW` | Bandwidth | 0-9 (see table below) | `AT+LR_TX_BW=7` |
+| `AT+LR_TX_CR` | Coding Rate | 45, 46, 47, 48 | `AT+LR_TX_CR=45` |
+| `AT+LR_TX_PREAMBLE` | Preamble length | symbols | `AT+LR_TX_PREAMBLE=8` |
+| `AT+LR_TX_SYNCWORD` | Sync word | 0x0000-0xFFFF | `AT+LR_TX_SYNCWORD=0x3444` |
+| `AT+LR_TX_CRC` | CRC enable/disable | 0=off, 1=on | `AT+LR_TX_CRC=1` |
+| `AT+LR_TX_IQ` | IQ inversion | 0=off, 1=on | `AT+LR_TX_IQ=0` |
+| `AT+LR_TX_HEADERMODE` | Header mode | 0=explicit, 1=implicit | `AT+LR_TX_HEADERMODE=0` |
+| `AT+LR_TX_LDRO` | Low Data Rate Opt. | 0=off, 1=on, 2=auto | `AT+LR_TX_LDRO=2` |
+
+### LoRa RX Parameters
+
+Same parameters as TX, replace `TX` with `RX` in command names:
+`AT+LR_RX_FREQ`, `AT+LR_RX_SF`, `AT+LR_RX_BW`, etc.
+
+> **Important:** `AT+LR_RX_PLDLEN` - Payload length is required for implicit header mode.
+
+### Bandwidth Reference
+
+| Value | Bandwidth | | Value | Bandwidth |
+|:-----:|----------:|-|:-----:|----------:|
+| 0 | 7.81 kHz  | | 5 | 41.67 kHz |
+| 1 | 10.42 kHz | | 6 | 62.5 kHz  |
+| 2 | 15.63 kHz | | 7 | 125 kHz   |
+| 3 | 20.83 kHz | | 8 | 250 kHz   |
+| 4 | 31.25 kHz | | 9 | 500 kHz   |
+
+### Quick Setup Commands
+
+Configure all RF parameters at once:
+
+**TX configuration:**
+```
+AT+LR_TX_SET=SF:7,BW:7,CR:45,Freq:869525000,IQInv:0,HeaderMode:0,CRC:1,Preamble:8,LDRO:2,Power:22
 ```
 
-**Example receiver output**
-
-```text
-+RX:5,48656C6C6F,RSSI:-45,SNR:9
+**RX configuration:**
+```
+AT+LR_RX_SET=SF:7,BW:7,CR:45,Freq:869525000,IQInv:0,HeaderMode:0,CRC:1,Preamble:8,LDRO:2
 ```
 
-`48656C6C6F` is `Hello` in hex. RSSI is in dBm and SNR is in dB. You can also use any compatible raw LoRa device with matching radio settings as the other end of the link.
+> **Tip:** Use [Semtech LoRa Calculator](https://www.semtech.com/design-support/lora-calculator) (select SX1262) to understand how different modulation settings affect your data/packet.
 
-## More examples
+**Simple rule:** High BW + low SF = faster data rate but shorter range. Low BW + high SF = longer range but slower. Use `AT+RF_GET_TOA=<packet_size>` to check Time on Air.
 
-### Repeat a test packet
+### RF Transmission and Reception
 
-After setting the TX and RX profiles as above, save `Hello` and repeat it every five seconds. Watch the receiver while you move it or swap an antenna.
+| Command | Description | Example |
+|---------|-------------|---------|
+| `AT+RF_TX_HEX` | Transmit data in HEX format | `AT+RF_TX_HEX=48656C6C6F` |
+| `AT+RF_TX_TXT` | Transmit data as text | `AT+RF_TX_TXT=Hello` |
+| `AT+RF_TX_LBT` | Transmit HEX data after a channel check (CAD) | `AT+RF_TX_LBT=500,0,48656C6C6F` |
+| `AT+RF_CAD` | Check the channel with CAD, no transmission | `AT+RF_CAD` |
+| `AT+RF_RX_TO_UART` | Enable/disable RX output | `AT+RF_RX_TO_UART=1` |
+| `AT+RF_RX_FORMAT` | RX data output format | `AT+RF_RX_FORMAT=HEX` |
 
-```text
-AT+RF_SAVE_PACKET=48656C6C6F
-AT+RF_TX_NVM_PERIOD=5000
+**Listen before talk:** `AT+RF_TX_LBT=<max_ms>,<force>,<HEX data>` checks the channel with CAD using the TX settings. If the channel is free, the packet is sent at once. If it is busy, the dongle stays in RX and retries after a random delay, for at most `max_ms` (0-600000, 0 = a single check). If the channel is still busy after `max_ms`, the packet is sent anyway with `force=1` and discarded with `+TX:BUSY` with `force=0`. CAD detects only LoRa traffic with the same SF and BW. `AT+RF_TX_LBT` also stops periodic transmission.
+
+**Channel check only:** `AT+RF_CAD` runs a single CAD with the same TX settings as `AT+RF_TX_LBT` and sends nothing. It answers `OK` and then asynchronously `+CAD:FREE` (no LoRa activity found) or `+CAD:BUSY` (LoRa preamble or data detected, or the dongle is transmitting itself). `+CAD:ERROR` means the check did not finish: an `AT+RF_TX_LBT` was pending, another radio command interrupted it, or the radio did not report a result. Afterwards the dongle returns to RX. One CAD takes only a few symbols, so a free result means the channel was free at that moment.
+
+**Received data format:**
+```
++RX:<length>,<data>,RSSI:<rssi>,SNR:<snr>
+```
+Example: `+RX:5,48656C6C6F,RSSI:-45,SNR:9` (5 bytes, data "Hello" in hex, RSSI -45 dBm, SNR 9 dB)
+
+**Transmission finished:**
+```
++TX:DONE
+```
+Sent asynchronously after every completed RF transmission (`AT+RF_TX_HEX`, `AT+RF_TX_TXT`, `AT+RF_TX_LBT`, `AT+RF_TX_SAVED` and each packet of `AT+RF_TX_SAVED_REPEAT`).
+
+**Channel check result:**
+```
++CAD:FREE
++CAD:BUSY
++CAD:ERROR
+```
+Result of `AT+RF_CAD` (see above).
+
+**Transmission discarded:**
+```
++TX:BUSY
+```
+Sent when an `AT+RF_TX_LBT` packet was not transmitted: the channel stayed busy, another `AT+RF_TX_LBT` was still pending, or another radio command (`AT+RF_TX_HEX`, `AT+RF_TX_CW`...) cancelled it.
+
+**Radio error:**
+```
++RADIO:ERROR
+```
+Sent when the LoRa radio (SX1262) could not be initialized at startup, or when a transmission (`AT+RF_TX_*`, `AT+RF_TX_CW`) or a channel check (`AT+RF_CAD`) is requested while the radio is not working. The dongle does not restart in this case - AT commands keep working, but no `+TX:DONE` / `+RX:` will follow. Check the hardware and use `AT+SYS_RESTART` to try again.
+
+### Saved Packets and Periodic Transmission
+
+Store one packet in NVM memory for later or periodic transmission:
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `AT+RF_SAVE_PACKET` | Save packet to memory | `AT+RF_SAVE_PACKET=010203` |
+| `AT+RF_TX_SAVED` | Transmit saved packet once | `AT+RF_TX_SAVED` |
+| `AT+RF_TX_SAVED_REPEAT` | Start/stop periodic TX | `AT+RF_TX_SAVED_REPEAT=ON` |
+| `AT+RF_TX_NVM_PERIOD` | Set TX period in ms | `AT+RF_TX_NVM_PERIOD=1000` |
+| `AT+RF_TX_PERIOD_STATUS` | Query periodic TX status | `AT+RF_TX_PERIOD_STATUS?` |
+
+### RF Test Commands
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `AT+RF_TX_CW` | Continuous wave (carrier only) | `AT+RF_TX_CW=1` |
+| `AT+RF_GET_TOA` | Calculate Time on Air (ms) | `AT+RF_GET_TOA=10` |
+| `AT+RF_GET_TSYM` | Get symbol time | `AT+RF_GET_TSYM` |
+
+### AUX GPIO Pins (1-8)
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `AT+AUX` | Set pin state | `AT+AUX=1,1` (pin 1 HIGH) |
+| `AT+AUX_PULSE` | Start PWM | `AT+AUX_PULSE=1,1,50` (1 Hz, 50% duty) |
+| `AT+AUX_PULSE_STOP` | Stop PWM | `AT+AUX_PULSE_STOP=1` |
+
+---
+
+## Practical Examples
+
+### Example 1: Point-to-Point Communication
+
+**Transmitter:**
+```
+AT+LR_TX_SET=SF:9,BW:7,CR:45,Freq:869525000,IQInv:0,HeaderMode:0,CRC:1,Preamble:8,Power:22,LDRO:2
+AT+RF_TX_HEX=AABBCCDD
+```
+
+**Receiver:**
+```
+AT+LR_RX_SET=SF:9,BW:7,CR:45,Freq:869525000,IQInv:0,HeaderMode:0,CRC:1,Preamble:8,LDRO:2
+```
+
+Receiver output: `+RX:4,AABBCCDD,RSSI:-47,SNR:8`
+
+### Example 2: Range Test with Periodic TX
+
+**TX Dongle** (sends packet every 2 seconds):
+```
+AT+LR_TX_SET=SF:12,BW:7,CR:45,Freq:869525000,IQInv:0,HeaderMode:0,CRC:1,Preamble:8,LDRO:2,Power:22
+AT+RF_SAVE_PACKET=31313232333334343535
+AT+RF_TX_NVM_PERIOD=2000
 AT+RF_TX_SAVED_REPEAT=ON
 ```
 
-Stop with `AT+RF_TX_SAVED_REPEAT=OFF`.
-
-### Check the channel and calculate packet airtime
-
-```text
-AT+RF_CAD
-AT+RF_GET_TOA=5
+**RX Dongle:**
+```
+AT+LR_RX_SET=SF:12,BW:7,CR:45,Freq:869525000,IQInv:0,HeaderMode:0,CRC:1,Preamble:8,LDRO:2
+AT+RF_RX_TO_UART=1
+AT+RF_RX_FORMAT=ASCII
 ```
 
-Wait for `+CAD:FREE`, `+CAD:BUSY` or `+CAD:ERROR` before starting the next RF operation. CAD checks for LoRa activity using the configured TX spreading factor and bandwidth. The airtime command uses the TX profile and a payload length of five bytes.
+Output: `+RX:10,1122334455,RSSI:-68,SNR:5`
 
-### Generate a PWM signal
+### Example 3: CW Test
 
-```text
-AT+AUX_PULSE=7,1000,50
-AT+AUX_PULSE_STOP=7
+Transmit carrier wave at 868 MHz with 10 dBm:
+```
+AT+LR_TX_FREQ=868000000
+AT+LR_TX_POWER=10
+AT+RF_TX_CW=1
 ```
 
-The first command starts 1 kHz at 50% duty cycle on AUX 7. The second stops it.
+Stop: `AT+RF_TX_CW=0`
 
-## Hardware at a glance
+### Example 4: Change Baud Rate
 
-| | |
-| --- | --- |
-| **LoRa radio** | Semtech SX1262 · SF5 to SF12 · bandwidths from 7.81 to 500 kHz |
-| **Hardware bands** | Firmware targets for 868 MHz and 915 MHz boards. See the listing for the version on sale. |
-| **USB** | USB-A with CP2102 virtual serial port · USB powered |
-| **AUX outputs** | 8 outputs · hardware PWM on AUX 7 and 8 up to 320 kHz · software PWM on AUX 1–6 up to 500 Hz |
+```
+AT+UART_BAUD?        → 115200
+AT+UART_BAUD=230400  → OK (dongle restarts)
+```
 
-The dongle handles the raw LoRa radio link. Your application defines the payload and protocol.
+> **Note:** Update your terminal to the new baud rate after restart.
 
-## Documentation and files
+---
 
-- [English AT command manual](AT_LORA_DONGLE_MANUAL_EN.md) · [Czech user manual](AT_LORA_DONGLE_MANUAL.md)
-- [Python send example](examples/send_packet.py) · [RF test script](rf_range_test.py)
-- [Hardware files](Hardware/) · [Build instructions](BUILD_INSTRUCTIONS.md) · [Firmware changelog](CHANGELOG.md)
+## Important Notes
+
+### TX/RX Parameter Compatibility
+
+For successful communication, these RF settings **must match** on both sides:
+
+| Parameter | TX = RX |
+|-----------|---------|
+| Frequency | `TX_FREQ` = `RX_FREQ` |
+| Spreading Factor | `TX_SF` = `RX_SF` |
+| Bandwidth | `TX_BW` = `RX_BW` |
+| Coding Rate | `TX_CR` = `RX_CR` |
+| Sync Word | `TX_SYNCWORD` = `RX_SYNCWORD` |
+| Header Mode | `TX_HEADERMODE` = `RX_HEADERMODE` |
+| CRC | `TX_CRC` = `RX_CRC` |
+| IQ Inversion | `TX_IQ` = `RX_IQ` |
+| LDRO | Use `2` (auto) on both sides |
+
+### Range vs. Speed Optimization
+
+| Setting | Maximum Range | Maximum Speed |
+|---------|---------------|---------------|
+| SF | 12 | 5 |
+| BW | 0 (7.81 kHz) | 9 (500 kHz) |
+| CR | 48 (4/8) | 45 (4/5) |
+| Power | 22 dBm | 22 dBm |
+| Result | > 10 km (open space) | Fastest data rate |
+
+### Header Modes
+
+| Mode | Value | Description |
+|------|-------|-------------|
+| Explicit | 0 | Header contains packet length (recommended) |
+| Implicit | 1 | No header - `RX_PLDLEN` must be set on receiver! |
+
+### LDRO (Low Data Rate Optimization)
+
+| Value | Description |
+|-------|-------------|
+| 0 | Off (manual) |
+| 1 | On (manual) |
+| 2 | **Auto (recommended)** - firmware selects based on SF/BW |
+
+---
+
+## Troubleshooting
+
+### Dongle Not Responding
+
+1. Check baud rate (try 115200 or 230400)
+2. Verify **MCU-USB** jumpers are connected on both RX and TX headers
+3. Check line ending (must be CR+LF)
+4. Reconnect USB cable
+5. Try `AT+SYS_RESTART`
+
+### RX Not Receiving Data
+
+1. Verify all RF parameters match between TX and RX
+2. Enable RX output: `AT+RF_RX_TO_UART=1`
+3. Increase TX power or reduce distance
+
+### Low RSSI / Packet Loss
+
+1. Increase TX power (max 22 dBm)
+2. Reduce distance
+3. Increase SF (7 → 9 → 12)
+4. Use external antenna (requires resoldering 0402 jumper from chip antenna to U.FL connector)
+
+### CRC Errors
+
+1. Change frequency (RF interference)
+2. Verify TX/RX parameter match
+3. Set LDRO to `2` (auto) on both sides
+
+---
+
+## Technical Specifications
+
+| Component | Specification |
+|-----------|---------------|
+| **MCU** | STM32L071 (ARM Cortex-M0+) |
+| **RF chip** | Semtech SX1262 |
+| **Frequency** | 150 MHz - 960 MHz |
+| **TX power** | 0 to +22 dBm |
+| **RX sensitivity** | -149.1 dBm (SF12, BW 7.81 kHz) |
+| **USB** | Virtual COM port (CP2102) |
+| **GPIO** | 8x AUX pins (PWM capable) |
+| **Power supply** | 5V from USB |
+| **Operating temp.** | -20°C to +70°C |
+
+---
+
+## Appendix: Python Automation
+
+Example script using `pyserial` for automated testing:
+
+```python
+#!/usr/bin/env python3
+import serial
+import time
+
+# Configuration
+PORT = "COM3"           # Windows: COM3, Linux: /dev/ttyUSB0
+BAUD = 230400
+FREQ = 869525000
+DATA_HEX = "48656C6C6F" # "Hello"
+
+def send_AT(ser, cmd, timeout=2.0):
+    """Send AT command and wait for response."""
+    ser.reset_input_buffer()
+    ser.write((cmd + "\r\n").encode())
+
+    t0, resp = time.time(), ""
+    while time.time() - t0 < timeout:
+        if ser.in_waiting:
+            resp += ser.read(ser.in_waiting).decode(errors="ignore")
+            if "OK" in resp or "ERROR" in resp:
+                break
+        time.sleep(0.01)
+    return resp.strip()
+
+# Main
+ser = serial.Serial(PORT, BAUD, timeout=1)
+time.sleep(0.5)
+
+# Verify device
+resp = send_AT(ser, "AT+IDENTIFY")
+if "Ropixon AT-USB LoRa_Dongle" not in resp:
+    print(f"Unknown device: {resp}")
+    ser.close()
+    exit(1)
+
+print(resp)
+
+# Configure and send
+send_AT(ser, f"AT+LR_TX_SET=SF:7,BW:7,CR:45,Freq:{FREQ},IQInv:0,HeaderMode:0,CRC:1,Preamble:8,LDRO:2,Power:22")
+
+for i in range(5):
+    resp = send_AT(ser, f"AT+RF_TX_HEX={DATA_HEX}", timeout=3.0)
+    print(f"Packet {i+1}: {'OK' if 'OK' in resp else 'FAIL'}")
+    time.sleep(1.0)
+
+ser.close()
+```
+
+[![I sell on Tindie](https://d2ss6ovg47m0r5.cloudfront.net/badges/tindie-smalls.png)](https://www.tindie.com/products/nn_6394/at-lora-usb-dongle/)
+
+---
+
+**© 2024-2026 Ropixon - AT LoRa Dongle**
