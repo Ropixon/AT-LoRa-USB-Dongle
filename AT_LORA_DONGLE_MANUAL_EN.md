@@ -1,108 +1,8 @@
-# Ropixon AT LoRa Dongle - User Manual
+# Ropixon AT LoRa USB Dongle User Manual
 
-**Ropixon AT-USB LoRa Dongle** enables sending and receiving all **LoRa** packets! Just configure it properly using intuitive **AT commands** via serial line.
+[Product overview and quick start](README.md) · [Czech user manual](AT_LORA_DONGLE_MANUAL.md) · [Firmware changelog](CHANGELOG.md)
 
-- No programming required.
-- It's suitable for rapid development, testing, or creating your own wireless LoRa link.
-
-## What is it for?
-
-AT LoRa Dongle is suitable for:
-
-- **Testing and development** of LoRa applications
-- **Point-to-Point communication** over long distances
-- **Range tests** - measuring capable of LoRa connection distance
-- **Sensor networks** - collecting data from remote sensors
-- **RF testing** - testing RF parameters, CW transmission
-- **Scanning** - capturing random packets transmitted over the air
-
-## Overview
-
-When sending packets, no additional "wrapping" or encryption of data is used - you always send RAW (hex or ASCII) data. The same applies to reception.
-
-Additional functions:
-AT LoRa dongle has 8 aux pins - you can set its logical level or activate PWM on it - just through the AT commands.
-
-**For quick start:**
-
-**1)** Install driver for serial interface CP2102 according to your system: [Download drivers](https://www.silabs.com/interface/usb-bridges/classic/device.cp2102?tab=softwareandtools)
- 
-**2)** Connect **AT dongle** to USB and set desired LoRa parameter configuration (or leave defaults)
-
-**3)** Send your first LoRa packet via AT commands:
-
-  - Send data in ASCII: ```AT+RF_TX_TXT=Hello, this is AT LoRa dongle Ropixon!```
-  - Send data in HEX: ```AT+RF_TX_HEX=48656C6C6F2C2074686973206973204154204C6F526120646F6E676C6520526F7069786F6E21```
-
-**4)** Reception is activated automatically - output format HEX/ASCII can be selected using `AT+RF_RX_FORMAT=HEX|ASCII, ?`
-
-**Status LEDs**
-
-The dongle has 3 LEDs serving these functions:
-
-| LED | Function |
-|-----|----------|
-| 🔴 RED | Reception of new AT commands |
-| 🟢 GREEN | System LED - indicates proper operation |
-| 🔵 BLUE | Reception or transmission of LoRa data |
-
-
-**Aux pins**
-
-The **AT dongle** has 8 aux pins that can be "manually" controlled or run PWM modulation: `AT+AUX_PULSE=<pin:1-8>,<freq_hz>,<duty%:0-100>`. Pins 7-8 use a hardware PWM timer (up to 320 kHz); pins 1-6 use a software timer (up to 500 Hz).
-
-### Main Features
-
-| Feature | Specification |
-|---------|---------------|
-| **RF LoRa Chip** | SX1262 LoRa transceiver from Semtech ([Datasheet](https://www.semtech.com/products/wireless-rf/lora-connect/sx1262)) |
-| **Interface** | USB (Virtual COM port) |
-| **Control** | AT commands via serial line |
-| **Baud rates** | 9600, 19200, 38400, 57600, 115200, **230400** (default) |
-| **Frequency** | 150 MHz - 960 MHz (optimized for 868 MHz band) |
-| **TX power** | 0 to +22 dBm |
-| **Spreading Factor** | SF5 to SF12 |
-| **Bandwidths** | 7.81 kHz to 500 kHz |
-
-> **Note:** RF path is optimized for 868 MHz band (EU: 863-870 MHz, USA: 915 MHz). The further from the operating band, the less power can be transmitted/received.
-
-
-### AUX Pins
-
-The dongle has 8 auxiliary pins that can be manually controlled or run PWM modulation:
-
-```
-AT+AUX_PULSE=<pin:1-8>,<freq_hz>,<duty%:0-100>
-```
-
-Pins 7-8 (aux7/aux8) are driven by a dedicated hardware PWM timer and support frequencies from 1 Hz up to 320 kHz. Pins 1-6 are driven by a FreeRTOS software timer, limited to 1-500 Hz; requested duty cycles are rounded to the nearest value representable in whole RTOS ticks (a `WARN: duty rounded to X%` response is sent when rounding occurs).
-
----
-
-## Quick Start
-
-**1.** Install driver according to your system: [Download drivers](https://www.silabs.com/interface/usb-bridges/classic/device.cp2102?tab=softwareandtools)
-
-**2.** Connect **AT dongle** to USB and set desired LoRa parameter configuration (or leave defaults)
-
-**3.** Send data via AT commands:
-   - ASCII: `AT+RF_TX_TXT=Hello, this is AT LoRa dongle Ropixon!`
-   - HEX: `AT+RF_TX_HEX=48656C6C6F2C2074686973206973204154204C6F526120646F6E676C6520526F7069786F6E21`
-
-**4.** Reception is activated automatically - output format can be selected using `AT+RF_RX_FORMAT=HEX` or `AT+RF_RX_FORMAT=ASCII`
-
----
-
-## Use Cases
-
-- **Testing and development** of LoRa applications
-- **Point-to-Point communication** over long distances
-- **Range tests** - measuring LoRa connection range
-- **Sensor networks** - collecting data from remote sensors
-- **RF testing** - testing RF parameters, CW transmission
-- **Scanning** - capturing packets transmitted over the air
-
----
+The dongle uses raw LoRa. It sends the payload you supply as text or hex, without adding an application wrapper or encryption. A compatible peer needs matching radio settings.
 
 ## Serial Connection
 
@@ -115,13 +15,15 @@ Pins 7-8 (aux7/aux8) are driven by a dedicated hardware PWM timer and support fr
 | Flow control | None |
 | Line ending | CR+LF (`\r\n`) |
 
+Supported baud rates are 9600, 19200, 38400, 57600, 115200 and 230400. If the USB serial port does not appear, install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers).
+
 ### Communication Test
 
 Send `AT` or `AT+HELP` - dongle will respond with a list of all available commands.
 
 Send `AT+IDENTIFY` - dongle will respond with device identification:
 ```
-Ropixon AT-USB LoRa Dongle, FW: v1.1.0, HW: <freq_band> <osc_type> v1.0, Build: <date> <time>, UID: xxxxxxxxxxxxxxxxxxxxxxxx
+Ropixon AT-USB LoRa Dongle, FW: v<version>, HW: <freq_band> <osc_type> v1.0, Build: <date> <time>, UID: xxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ---
@@ -266,6 +168,8 @@ Store one packet in NVM memory for later or periodic transmission:
 
 ### AUX GPIO Pins (1-8)
 
+Pins 7 and 8 use a hardware PWM timer from 1 Hz to 320 kHz. Pins 1–6 use a software timer from 1 Hz to 500 Hz and round duty cycle to whole RTOS ticks. The dongle reports `WARN: duty rounded to X%` when it rounds the requested value.
+
 | Command | Description | Example |
 |---------|-------------|---------|
 | `AT+AUX` | Set pin state | `AT+AUX=1,1` (pin 1 HIGH) |
@@ -358,7 +262,8 @@ For successful communication, these RF settings **must match** on both sides:
 | BW | 0 (7.81 kHz) | 9 (500 kHz) |
 | CR | 48 (4/8) | 45 (4/5) |
 | Power | 22 dBm | 22 dBm |
-| Result | > 10 km (open space) | Fastest data rate |
+
+Actual range depends on the antennas, installation and surroundings.
 
 ### Header Modes
 
@@ -414,7 +319,7 @@ For successful communication, these RF settings **must match** on both sides:
 |-----------|---------------|
 | **MCU** | STM32L071 (ARM Cortex-M0+) |
 | **RF chip** | Semtech SX1262 |
-| **Frequency** | 150 MHz - 960 MHz |
+| **Frequency** | 868 MHz or 915 MHz hardware, depending on the board variant. The firmware accepts frequency values from 150 to 960 MHz. The usable RF range depends on the populated RF path and antenna. |
 | **TX power** | 0 to +22 dBm |
 | **RX sensitivity** | -149.1 dBm (SF12, BW 7.81 kHz) |
 | **USB** | Virtual COM port (CP2102) |
@@ -424,59 +329,23 @@ For successful communication, these RF settings **must match** on both sides:
 
 ---
 
-## Appendix: Python Automation
+### Status LEDs
 
-Example script using `pyserial` for automated testing:
+| LED | Function |
+| --- | --- |
+| Red | AT command activity |
+| Green | System status |
+| Blue | LoRa RX or TX activity |
 
-```python
-#!/usr/bin/env python3
-import serial
-import time
+## Python automation
 
-# Configuration
-PORT = "COM3"           # Windows: COM3, Linux: /dev/ttyUSB0
-BAUD = 230400
-FREQ = 869525000
-DATA_HEX = "48656C6C6F" # "Hello"
+The [Python example](examples/send_packet.py) requires Python 3.9 or later and sends the five bytes of `Hello` using the dongle's current TX settings. Use an idle dongle and stop periodic transmission before running it. Close any terminal connected to the same port.
 
-def send_AT(ser, cmd, timeout=2.0):
-    """Send AT command and wait for response."""
-    ser.reset_input_buffer()
-    ser.write((cmd + "\r\n").encode())
-
-    t0, resp = time.time(), ""
-    while time.time() - t0 < timeout:
-        if ser.in_waiting:
-            resp += ser.read(ser.in_waiting).decode(errors="ignore")
-            if "OK" in resp or "ERROR" in resp:
-                break
-        time.sleep(0.01)
-    return resp.strip()
-
-# Main
-ser = serial.Serial(PORT, BAUD, timeout=1)
-time.sleep(0.5)
-
-# Verify device
-resp = send_AT(ser, "AT+IDENTIFY")
-if "Ropixon AT-USB LoRa_Dongle" not in resp:
-    print(f"Unknown device: {resp}")
-    ser.close()
-    exit(1)
-
-print(resp)
-
-# Configure and send
-send_AT(ser, f"AT+LR_TX_SET=SF:7,BW:7,CR:45,Freq:{FREQ},IQInv:0,HeaderMode:0,CRC:1,Preamble:8,LDRO:2,Power:22")
-
-for i in range(5):
-    resp = send_AT(ser, f"AT+RF_TX_HEX={DATA_HEX}", timeout=3.0)
-    print(f"Packet {i+1}: {'OK' if 'OK' in resp else 'FAIL'}")
-    time.sleep(1.0)
-
-ser.close()
+```sh
+python -m pip install pyserial
+python examples/send_packet.py COM3
 ```
 
----
+Replace `COM3` with your serial port, such as `/dev/ttyUSB0` on Linux. If you changed the dongle's baud rate, pass it with `--baud`.
 
-**© 2024-2026 Ropixon - AT LoRa Dongle**
+The script checks `AT+IDENTIFY` and looks for the firmware's `TX_DONE` capability. It waits for `+TX:DONE` to confirm that the radio finished sending. Check the receiving device separately to confirm delivery.
