@@ -58,7 +58,7 @@ Ropixon AT-USB LoRa Dongle, FW: v<version>, HW: <freq_band> <osc_type> v1.0, Bui
 | `AT+LR_TX_BW` | Bandwidth | 0-9 (see table below) | `AT+LR_TX_BW=7` |
 | `AT+LR_TX_CR` | Coding Rate | 45, 46, 47, 48 | `AT+LR_TX_CR=45` |
 | `AT+LR_TX_PREAMBLE` | Preamble length | symbols | `AT+LR_TX_PREAMBLE=8` |
-| `AT+LR_TX_SYNCWORD` | Sync word | 0x0000-0xFFFF | `AT+LR_TX_SYNCWORD=0x3444` |
+| `AT+LR_TX_SYNCWORD` | Sync word | Two hex digits, for example `12` or `34` | `AT+LR_TX_SYNCWORD=12` |
 | `AT+LR_TX_CRC` | CRC enable/disable | 0=off, 1=on | `AT+LR_TX_CRC=1` |
 | `AT+LR_TX_IQ` | IQ inversion | 0=off, 1=on | `AT+LR_TX_IQ=0` |
 | `AT+LR_TX_HEADERMODE` | Header mode | 0=explicit, 1=implicit | `AT+LR_TX_HEADERMODE=0` |
@@ -67,7 +67,7 @@ Ropixon AT-USB LoRa Dongle, FW: v<version>, HW: <freq_band> <osc_type> v1.0, Bui
 ### LoRa RX Parameters
 
 Same parameters as TX, replace `TX` with `RX` in command names:
-`AT+LR_RX_FREQ`, `AT+LR_RX_SF`, `AT+LR_RX_BW`, etc.
+`AT+LR_RX_FREQ`, `AT+LR_RX_SF`, `AT+LR_RX_BW`, etc. For the RX sync word, use `AT+LR_RX_SYNCWORD=12` or the same two hex digits set on the transmitter.
 
 > **Important:** `AT+LR_RX_PLDLEN` - Payload length is required for implicit header mode.
 

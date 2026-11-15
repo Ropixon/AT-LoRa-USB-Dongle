@@ -1,48 +1,127 @@
 # Ropixon AT LoRa USB Dongle
 
-**Send and receive raw LoRa packets from your computer.**
-
-Plug the SX1262 dongle into USB, open a serial terminal, and send a packet with one AT command. See the payload and signal quality (RSSI and SNR) for each received packet. Use it to debug a LoRa device, test a radio link, or automate RF tests with Python.
-
-**[Buy on Tindie](https://www.tindie.com/products/nn_6394/at-lora-usb-dongle/) · [Quick start](#quick-start) · [AT command manual](AT_LORA_DONGLE_MANUAL_EN.md)**
-
-<img src="HW_image.png" alt="Ropixon LoRa USB dongle with its USB-A connector and AUX pin headers" width="400">
-
-| Send from the first dongle | See on the receiving dongle |
-| --- | --- |
-| `AT+RF_TX_TXT=Hello` | `+RX:5,48656C6C6F,RSSI:-45,SNR:9` |
-
-Example with matching radio settings and HEX output. `48656C6C6F` is the five-byte payload `Hello`. RSSI is in dBm and SNR is in dB.
+<table>
+<tr>
+<td>
+<p><strong>Send, receive and inspect raw LoRa packets from your computer.</strong></p>
+<p>Plug in the SX1262 dongle and open a serial terminal. Send text or hex with an AT command. On receive, see the packet data, RSSI and SNR together.</p>
+<p><strong>Send</strong> <code>AT+RF_TX_TXT=Hello</code><br>
+<strong>Receive</strong> <code>+RX:5,48656C6C6F,RSSI:-45,SNR:9</code></p>
+<p><strong><a href="https://www.tindie.com/products/nn_6394/at-lora-usb-dongle/">Buy on Tindie</a></strong> · <a href="#quick-start">Quick start</a> · <a href="#build-with-ai">Build with AI</a> · <a href="AT_LORA_DONGLE_MANUAL_EN.md">AT command manual</a></p>
+</td>
+<td align="center">
+<img src="HW_image.png" alt="Ropixon SX1262 LoRa dongle with USB-A connector and AUX pin headers" width="265">
+</td>
+</tr>
+</table>
 
 ## What you can do with it
 
-- **Debug a LoRa device.** Match its radio settings and inspect the packets it sends. Transmit your own text or hex payloads to test how it responds.
-- **Compare antennas and test range.** Set one dongle to repeat a saved packet. Use the other to compare RSSI, SNR and packet reception at different locations or with different settings.
-- **Automate RF tests.** Use a USB serial port from Python, configure TX and RX separately, and wait for `+TX:DONE` before moving on to the next test.
+| Use case | What the dongle does | Try this |
+| --- | --- | --- |
+| **Debug a LoRa node** | View raw payloads with per-packet RSSI and SNR. Send your own ASCII or hex test packets. | `AT+RF_RX_FORMAT=HEX` · `AT+RF_TX_HEX=48656C6C6F` |
+| **Build a point-to-point link** | Configure TX and RX separately, including frequency, spreading factor, bandwidth and sync word. | `AT+LR_TX_SET` · `AT+LR_RX_SET` |
+| **Compare antennas or test range** | Repeat a saved packet from one end and compare packet reception, RSSI and SNR at the other end. | `AT+RF_TX_SAVED_REPEAT=ON` |
+| **Check the channel before sending** | Use LoRa channel activity detection (CAD) on the selected TX profile, or let the dongle wait for the channel to clear before transmitting. | `AT+RF_CAD` · `AT+RF_TX_LBT=500,0,48656C6C6F` |
+| **Run RF bench tests** | Generate a continuous carrier for lab measurements or calculate the airtime for a packet. | `AT+RF_TX_CW` · `AT+RF_GET_TOA=5` |
+| **Control test signals** | Set eight AUX outputs or generate PWM. Pins 7 and 8 use hardware PWM. | `AT+AUX=1,1` · `AT+AUX_PULSE=7,1000,50` |
+| **Automate a test or build an app** | Use USB serial from Python. Read packet events and wait for the radio to finish transmitting. | `AT+CAPS` · `+TX:DONE` · [Python example](examples/send_packet.py) |
+
+Firmware 1.3.0 added SNR in received packet reports. Firmware 1.4.0 added CAD and listen before talk. Use `AT+IDENTIFY` to check the firmware and `AT+CAPS` to check supported features.
+
+## Build with AI
+
+Give [the AT command manual](https://github.com/Ropixon/AT-LoRa-USB-Dongle/blob/master/AT_LORA_DONGLE_MANUAL_EN.md) to ChatGPT, Claude or Copilot. Start with the prompt below to generate a Python tool for sending packets and logging their signal quality. You can also ask for a desktop serial monitor, a CSV logger or a range-test tool for two dongles.
+
+> **Prompt to copy**
+>
+> Using the attached Ropixon AT LoRa USB Dongle manual, write a Python 3 tool with pyserial. Let me choose the serial port and baud rate. Use 230400 baud, 8N1, no flow control and CR+LF by default. Check the device with `AT+IDENTIFY` and read `AT+CAPS` before enabling any features that depend on firmware support. Keep the current RF settings. Enable serial packet output with `AT+RF_RX_TO_UART=1` and set `AT+RF_RX_FORMAT=HEX` in listen mode.
+>
+> Make the default mode listen for HEX packets and log timestamps, payload, RSSI and SNR when present. Add an option to send one hex packet with `AT+RF_TX_HEX`. Report transmit completion on `+TX:DONE` and show command errors and timeouts. Include the install and run commands for Windows and use only AT commands documented in the manual.
+
+A working starting point for the transmit side is already in the repo. From the repository folder, use the following commands with an idle dongle and replace `COM3` with its serial port.
+
+```powershell
+python -m pip install pyserial
+python examples/send_packet.py COM3
+```
 
 ## Quick start
 
-1. Plug the dongle into USB. If no serial port appears, install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers).
-2. Open the port in a serial terminal at **230400 baud, 8N1, no flow control**. Set the terminal to send **CR+LF**. Use the configured baud rate if it was changed.
-3. Send `AT+IDENTIFY` to check the connection and see the firmware version and hardware variant.
-4. To see the packet on a second dongle, configure its RX profile to match the sender, then run `AT+RF_RX_TO_UART=1` and `AT+RF_RX_FORMAT=HEX` on the receiver. See [which settings to match](AT_LORA_DONGLE_MANUAL_EN.md#txrx-parameter-compatibility).
-5. Send `AT+RF_TX_TXT=Hello` on the transmitter. On firmware with the `TX_DONE` capability, `+TX:DONE` confirms that the radio finished transmitting. Check the receiver for its `+RX:` line.
+1. Plug the dongle into USB-A. If a serial port does not appear, install the [Silicon Labs CP210x VCP driver](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers).
+2. Open the serial port at **230400 baud, 8N1, no flow control**, with **CR+LF** line endings. Send `AT+IDENTIFY` to see the firmware and board variant.
+3. For a two-dongle test, replace `FREQUENCY_HZ` below with the same permitted frequency in Hz for both dongles and their hardware band. The examples set both profiles explicitly so they also work when the dongles had different settings before the test.
 
-A second dongle makes the demo easy. A compatible LoRa device with matching radio settings can also act as the other end of the link.
+**On the receiving dongle**
 
-## Radio and hardware
+```text
+AT+LR_RX_SET=SF:7,BW:7,CR:45,Freq:FREQUENCY_HZ,IQInv:0,HeaderMode:0,CRC:1,Preamble:8,LDRO:2
+AT+LR_RX_SYNCWORD=12
+AT+RF_RX_TO_UART=1
+AT+RF_RX_FORMAT=HEX
+```
 
-- **Radio** — Semtech SX1262, with independently configurable TX and RX profiles.
-- **Hardware variants** — Firmware build targets cover 868 MHz and 915 MHz hardware. Check the Tindie options for the version on sale.
-- **RF tools** — Periodic packets, channel activity detection (CAD), listen before talk, continuous wave (CW) and a time-on-air calculator. Feature support depends on firmware version.
-- **USB and I/O** — CP2102 USB serial interface and eight AUX outputs with PWM support. AUX 7 and 8 use hardware PWM.
+**On the transmitting dongle**
 
-## Documentation and examples
+```text
+AT+LR_TX_SET=SF:7,BW:7,CR:45,Freq:FREQUENCY_HZ,IQInv:0,HeaderMode:0,CRC:1,Preamble:8,LDRO:2,Power:0
+AT+LR_TX_SYNCWORD=12
+AT+RF_TX_TXT=Hello
+```
 
-| I want to… | Where to go |
+**Example receiver output**
+
+```text
++RX:5,48656C6C6F,RSSI:-45,SNR:9
+```
+
+`48656C6C6F` is `Hello` in hex. RSSI is in dBm and SNR is in dB. You can also use any compatible raw LoRa device with matching radio settings as the other end of the link.
+
+## More examples
+
+### Repeat a test packet
+
+After setting the TX and RX profiles as above, save `Hello` and repeat it every five seconds. Watch the receiver while you move it or swap an antenna.
+
+```text
+AT+RF_SAVE_PACKET=48656C6C6F
+AT+RF_TX_NVM_PERIOD=5000
+AT+RF_TX_SAVED_REPEAT=ON
+```
+
+Stop with `AT+RF_TX_SAVED_REPEAT=OFF`.
+
+### Check the channel and calculate packet airtime
+
+```text
+AT+RF_CAD
+AT+RF_GET_TOA=5
+```
+
+Wait for `+CAD:FREE`, `+CAD:BUSY` or `+CAD:ERROR` before starting the next RF operation. CAD checks for LoRa activity using the configured TX spreading factor and bandwidth. The airtime command uses the TX profile and a payload length of five bytes.
+
+### Generate a PWM signal
+
+```text
+AT+AUX_PULSE=7,1000,50
+AT+AUX_PULSE_STOP=7
+```
+
+The first command starts 1 kHz at 50% duty cycle on AUX 7. The second stops it.
+
+## Hardware at a glance
+
+| | |
 | --- | --- |
-| Look up an AT command or troubleshoot a link | [English user manual](AT_LORA_DONGLE_MANUAL_EN.md) · [Czech user manual](AT_LORA_DONGLE_MANUAL.md) |
-| Send a packet from Python | [Python quick start](examples/send_packet.py) · [Setup and usage](AT_LORA_DONGLE_MANUAL_EN.md#python-automation) |
-| Run the developer RF tests | [RF test script](rf_range_test.py) |
-| Build firmware for my board | [Build instructions](BUILD_INSTRUCTIONS.md) · [Firmware changelog](CHANGELOG.md) |
-| See the schematic or PCB files | [Hardware files](Hardware/) |
+| **LoRa radio** | Semtech SX1262 · SF5 to SF12 · bandwidths from 7.81 to 500 kHz |
+| **Hardware bands** | Firmware targets for 868 MHz and 915 MHz boards. See the listing for the version on sale. |
+| **USB** | USB-A with CP2102 virtual serial port · USB powered |
+| **AUX outputs** | 8 outputs · hardware PWM on AUX 7 and 8 up to 320 kHz · software PWM on AUX 1–6 up to 500 Hz |
+
+The dongle handles the raw LoRa radio link. Your application defines the payload and protocol.
+
+## Documentation and files
+
+- [English AT command manual](AT_LORA_DONGLE_MANUAL_EN.md) · [Czech user manual](AT_LORA_DONGLE_MANUAL.md)
+- [Python send example](examples/send_packet.py) · [RF test script](rf_range_test.py)
+- [Hardware files](Hardware/) · [Build instructions](BUILD_INSTRUCTIONS.md) · [Firmware changelog](CHANGELOG.md)
