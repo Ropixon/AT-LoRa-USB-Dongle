@@ -1,45 +1,23 @@
-# Ropixon AT LoRa Dongle - User Manual
+# Ropixon AT LoRa USB Dongle - SX1262 with AT Commands
 
-**Ropixon AT-USB LoRa Dongle** enables sending and receiving all **LoRa** packets! Just configure it properly using intuitive **AT commands** via serial line. 
+**Send and receive RAW LoRa packets directly from your PC - no firmware coding required.**
 
-- No programming required.
-- It's suitable for rapid development, testing, or creating your own wireless LoRa link.
+Connect the dongle to USB, open a serial terminal, set your LoRa parameters, and send your first packet using simple AT commands.
 
-## What is it for?
+**RAW packet access lets you process LoRa data directly on your PC in Python.** Read sensor values, decode your own packet formats, log received data, or automate tests through the serial port - without changing the dongle firmware. The dongle adds no extra protocol headers or encryption to your payload.
 
-AT LoRa Dongle is suitable for:
+- **Test your LoRa devices** - send custom packets and inspect received data with RSSI and SNR.
+- **Build your own wireless link** - exchange RAW data in ASCII or HEX format.
+- **Check real-world range** - use periodic transmission to compare settings and antenna setups.
+- **Control the radio** - adjust frequency, spreading factor, bandwidth, and TX power.
+- **Go beyond radio** - control 8 AUX pins, including PWM, through AT commands.
 
-- **Testing and development** of LoRa applications
-- **Point-to-Point communication** over long distances
-- **Range tests** - measuring capable of LoRa connection distance
-- **Sensor networks** - collecting data from remote sensors
-- **RF testing** - testing RF parameters, CW transmission
-- **Scanning** - capturing random packets transmitted over the air
+Based on the **Semtech SX1262**, with a USB virtual COM port and an RF design optimized for **868 MHz**.
 
-## Overview
-
-When sending packets, no additional "wrapping" or encryption of data is used - you always send RAW (hex or ASCII) data. The same applies to reception.
-
-Additional functions:
-AT LoRa dongle has 8 aux pins - you can set its logical level or activate PWM on it - just through the AT commands.
+**[Buy on Tindie](https://www.tindie.com/products/nn_6394/at-lora-usb-dongle/)** · **[Quick Start](#quick-start)** · **[AT Commands](#at-commands-reference)** · **[Python Example](#appendix-python-automation)**
 
 ![AT LoRa Dongle Hardware](HW_image.png)
 *AT LoRa Dongle - hardware overview*
-
-**For quick start:**
-
-**Ready-to-use device available on [Tindie](https://www.tindie.com/products/nn_6394/at-lora-usb-dongle/).**
-
-**1)** Install driver for serial interface CP2102 according to your system: [Download drivers](https://www.silabs.com/interface/usb-bridges/classic/device.cp2102?tab=softwareandtools)
- 
-**2)** Connect **AT dongle** to USB and set desired LoRa parameter configuration (or leave defaults)
-
-**3)** Send your first LoRa packet via AT commands:
-
-  - Send data in ASCII: ```AT+RF_TX_TXT=Hello, this is AT LoRa dongle Ropixon!```
-  - Send data in HEX: ```AT+RF_TX_HEX=48656C6C6F2C2074686973206973204154204C6F526120646F6E676C6520526F7069786F6E21```
-
-**4)** Reception is activated automatically - output format HEX/ASCII can be selected using `AT+RF_RX_FORMAT=HEX|ASCII, ?`
 
 **Status LEDs**
 
@@ -51,10 +29,6 @@ The dongle has 3 LEDs serving these functions:
 | 🟢 GREEN | System LED - indicates proper operation |
 | 🔵 BLUE | Reception or transmission of LoRa data |
 
-
-**Aux pins**
-
-The **AT dongle** has 8 aux pins that can be "manually" controlled or run PWM modulation: `AT+AUX_PULSE=<pin:1-8>,<freq_hz>,<duty%:0-100>`. Pins 7-8 use a hardware PWM timer (up to 320 kHz); pins 1-6 use a software timer (up to 500 Hz).
 
 ### Main Features
 
@@ -105,7 +79,7 @@ Pins 7-8 (aux7/aux8) are driven by a dedicated hardware PWM timer and support fr
 - **Range tests** - measuring LoRa connection range
 - **Sensor networks** - collecting data from remote sensors
 - **RF testing** - testing RF parameters, CW transmission
-- **Scanning** - capturing packets transmitted over the air
+- **Packet reception** - capturing LoRa packets with matching radio settings
 
 ---
 
